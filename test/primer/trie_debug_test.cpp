@@ -39,6 +39,9 @@ TEST(TrieDebugger, TestCase) {
     }
     trie = trie.Put<uint32_t>(key, value);
   }
+  // std::cout << "There are " << trie.root_->children_->size() << "children on the root" << std::endl;
+  // std::cout << "There are " << trie.root_->children_['9']->size() << "children on the node 9" << std::endl;
+  // std::cout << "The value of 969 is  " << *(trie.Get<uint32_t>("969")) << std::endl;
 
   // Put a breakpoint here.
 
