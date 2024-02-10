@@ -12,14 +12,12 @@ auto TrieStore::Get(std::string_view key) -> std::optional<ValueGuard<T>> {
   // (3) If the value is found, return a ValueGuard object that holds a reference to the value and the
   //     root. Otherwise, return std::nullopt.
   // throw NotImplementedException("TrieStore::Get is not implemented.");
-  Trie root_cp;
-  {
-    std::lock_guard<std::mutex> lock(root_lock_);
-    root_cp = root_;
-  }
+  root_lock_.lock();
+  Trie root_cp = root_;
+  root_lock_.unlock();
   const T *value = root_cp.Get<T>(key);
   if (value) {
-    return ValueGuard<T>(root_cp, *value);
+    return {ValueGuard<T>(std::move(root_cp), *value)};
   }
   return std::nullopt;
 }
@@ -29,13 +27,11 @@ void TrieStore::Put(std::string_view key, T value) {
   // You will need to ensure there is only one writer at a time. Think of how you can achieve this.
   // The logic should be somehow similar to `TrieStore::Get`.
   // throw NotImplementedException("TrieStore::Put is not implemented.");
+  std::lock_guard<std::mutex> w_lock(write_lock_);
+  Trie new_root = root_.Put<T>(key, std::move(value));
   {
-    std::lock_guard<std::mutex> w_lock(write_lock_);
-    {
-      std::lock_guard<std::mutex> r_lock(root_lock_);
-      Trie new_root = root_.Put<T>(key, std::move(value));
-      root_ = new_root;
-    }
+    std::lock_guard<std::mutex> r_lk(root_lock_);
+    root_ = new_root;
   }
 }
 
@@ -43,14 +39,11 @@ void TrieStore::Remove(std::string_view key) {
   // You will need to ensure there is only one writer at a time. Think of how you can achieve this.
   // The logic should be somehow similar to `TrieStore::Get`.
   // throw NotImplementedException("TrieStore::Remove is not implemented.");
+  std::lock_guard<std::mutex> w_lock(write_lock_);
+  Trie new_root = root_.Remove(key);
   {
-    std::lock_guard<std::mutex> w_lock(write_lock_);
-    Trie new_root = root_.Remove(key);
-    {
-      std::lock_guard<std::mutex> r_lock(root_lock_);
-      Trie new_root = root_.Remove(key);
-      root_ = new_root;
-    }
+    std::lock_guard<std::mutex> r_lk(root_lock_);
+    root_ = new_root;
   }
 }
 
