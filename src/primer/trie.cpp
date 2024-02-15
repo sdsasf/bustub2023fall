@@ -43,21 +43,21 @@ auto Trie::Put(std::string_view key, T value) const -> Trie {
   std::shared_ptr<const TrieNode> node = root_;
   std::shared_ptr<const TrieNode> new_root;
   if (root_ == nullptr) {
+    if (key.empty()) {
+      new_root = std::make_shared<TrieNodeWithValue<T>>(std::make_shared<T>(std::move(value)));
+      return Trie(new_root);
+    }
     auto j = key.begin();
     cur = std::make_shared<TrieNode>();
     new_root = cur;
     parent = cur;
-    if (key.empty()) {
-      new_root = std::make_shared<TrieNodeWithValue<T>>(std::make_shared<T>(std::move(value)));
-    } else {
-      while (j != std::prev(key.end())) {
-        cur = std::make_shared<TrieNode>();
-        parent->children_[*j] = cur;
-        parent = cur;
-        ++j;
-      }
-      cur->children_[*j] = std::make_shared<TrieNodeWithValue<T>>(std::make_shared<T>(std::move(value)));
+    while (j != std::prev(key.end())) {
+      cur = std::make_shared<TrieNode>();
+      parent->children_[*j] = cur;
+      parent = cur;
+      ++j;
     }
+    cur->children_[*j] = std::make_shared<TrieNodeWithValue<T>>(std::make_shared<T>(std::move(value)));
     return Trie(new_root);
   }
   cur = std::shared_ptr<TrieNode>(root_->Clone()), parent = cur;
@@ -136,9 +136,9 @@ auto Trie::Remove(std::string_view key) const -> Trie {
     stack.pop_back();
     cur->children_.erase(*j);
     ++j;
-    if (stack.empty()) {
-      return Trie(nullptr);
-    }
+  }
+  if (j == key.rend() && !(cur->is_value_node_) && cur->children_.empty()) {
+    return Trie(nullptr);
   }
   return Trie(new_root);
 }
