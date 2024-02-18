@@ -28,7 +28,7 @@ enum class AccessType { Unknown = 0, Lookup, Scan, Index };
 class LRUKNode {
  public:
   LRUKNode() = default;
-  LRUKNode(frame_id_t fid, size_t k, size_t timestamp) : k_(k), fid_(fid) {
+  LRUKNode(size_t k, size_t timestamp) : k_(k) {
     history_.push_back(timestamp);
     access_num_ = 1;
   }
@@ -51,7 +51,7 @@ class LRUKNode {
   std::list<size_t> history_;
   size_t k_;
   size_t access_num_;
-  frame_id_t fid_;
+  [[maybe_unused]] frame_id_t fid_;
   bool is_evictable_{false};
 };
 

@@ -65,7 +65,7 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
   }
   auto ptr = node_store_.find(frame_id);
   if (ptr == node_store_.end()) {
-    node_store_[frame_id] = LRUKNode(frame_id, k_, current_timestamp_);
+    node_store_[frame_id] = LRUKNode(k_, current_timestamp_);
   } else {
     ptr->second.Access(current_timestamp_);
   }
