@@ -67,7 +67,7 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   replacer_->RecordAccess(f_id);
   replacer_->SetEvictable(f_id, false);
   pages_[f_id].pin_count_ = 1;
-  pages_[f_id].is_dirty_ = true;
+  pages_[f_id].is_dirty_ = false;
   page_table_[p_id] = f_id;
   return &pages_[f_id];
 }
@@ -126,7 +126,9 @@ auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unus
   if ((--pages_[ptr->second].pin_count_) == 0) {
     replacer_->SetEvictable(ptr->second, true);
   }
-  pages_[ptr->second].is_dirty_ = is_dirty;
+  if (is_dirty) {
+    pages_[ptr->second].is_dirty_ = is_dirty;
+  }
   return true;
 }
 

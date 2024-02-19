@@ -51,10 +51,10 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
         }
       }
     }
+    node_store_.erase(fid);
+    --curr_size_;
+    *frame_id = fid;
   }
-  node_store_.erase(fid);
-  --curr_size_;
-  *frame_id = fid;
   return true;
 }
 
@@ -96,6 +96,7 @@ void LRUKReplacer::Remove(frame_id_t frame_id) {
     throw Exception("Not find frame id!");
   }
   node_store_.erase(ptr);
+  --curr_size_;
 }
 
 auto LRUKReplacer::Size() -> size_t {
