@@ -252,7 +252,6 @@ void DiskExtendibleHashTable<K, V, KC>::UpdateDirectoryMapping(ExtendibleHTableD
  *****************************************************************************/
 template <typename K, typename V, typename KC>
 auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transaction) -> bool {
-  V value;
   uint32_t hash = Hash(key);
   ReadPageGuard h_r_guard = bpm_->FetchPageRead(header_page_id_);
   auto header_page = h_r_guard.As<ExtendibleHTableHeaderPage>();  // use read guard first
@@ -300,7 +299,7 @@ void DiskExtendibleHashTable<K, V, KC>::MigrateEntries(ExtendibleHTableBucketPag
                                                        uint32_t local_depth_mask) {  // note overflow
   uint32_t new_local_depth_mask = (local_depth_mask << 1) + 1;
   uint32_t sz = old_bucket->Size();
-  for (auto i = 0; i < sz; ++i) {
+  for (uint32_t i = 0; i < sz; ++i) {
     if ((Hash(old_bucket->KeyAt(i)) & new_local_depth_mask) == (new_bucket_idx & new_local_depth_mask)) {
       new_bucket->Insert(old_bucket->KeyAt(i), old_bucket->ValueAt(i), cmp_);
       old_bucket->RemoveAt(i);
