@@ -75,7 +75,7 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Insert(const K &key, const V &value, 
     if (cmp(KeyAt(l), key) < 0) {
       ++l;
     }
-    for (auto j = size_ - 1; j >= l; --j) {
+    for (uint32_t j = size_ - 1; j >= l; --j) {
       array_[j + 1] = array_[j];
     }
   }
@@ -86,9 +86,9 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Insert(const K &key, const V &value, 
 
 template <typename K, typename V, typename KC>
 auto ExtendibleHTableBucketPage<K, V, KC>::Remove(const K &key, const KC &cmp) -> bool {
-  for (auto i = 0; i < size_; ++i) {
+  for (uint32_t i = 0; i < size_; ++i) {
     if (!cmp(key, KeyAt(i))) {
-      for (auto j = i + 1; j < size_; ++j) {
+      for (uint32_t j = i + 1; j < size_; ++j) {
         array_[j - 1] = array_[j];
       }
       --size_;
@@ -101,7 +101,7 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Remove(const K &key, const KC &cmp) -
 template <typename K, typename V, typename KC>
 void ExtendibleHTableBucketPage<K, V, KC>::RemoveAt(uint32_t bucket_idx) {
   // throw NotImplementedException("ExtendibleHTableBucketPage not implemented");
-  for (auto i = bucket_idx + 1; i < size_; ++i) {
+  for (uint32_t i = bucket_idx + 1; i < size_; ++i) {
     array_[i - 1] = array_[i];
   }
   --size_;
