@@ -39,7 +39,7 @@ auto BasicPageGuard::UpgradeRead() -> ReadPageGuard {
   // r_guard.guard_.is_dirty_ = is_dirty_;
   bpm_ = nullptr;
   page_ = nullptr;
-  return std::move(r_guard);
+  return r_guard;
 }
 
 auto BasicPageGuard::UpgradeWrite() -> WritePageGuard {
@@ -47,7 +47,7 @@ auto BasicPageGuard::UpgradeWrite() -> WritePageGuard {
   // r_guard.guard_.is_dirty_ = is_dirty_;
   bpm_ = nullptr;
   page_ = nullptr;
-  return std::move(w_guard);
+  return w_guard;
 }
 
 ReadPageGuard::ReadPageGuard(ReadPageGuard &&that) noexcept { guard_ = std::move(that.guard_); }
