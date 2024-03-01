@@ -115,7 +115,7 @@ class ReadPageGuard {
  public:
   ReadPageGuard() = default;
   ReadPageGuard(BufferPoolManager *bpm, Page *page) : guard_(bpm, page) {
-    if (page) {
+    if (page != nullptr) {
       guard_.page_->RLatch();
     }
   }
@@ -179,7 +179,7 @@ class WritePageGuard {
  public:
   WritePageGuard() = default;
   WritePageGuard(BufferPoolManager *bpm, Page *page) : guard_(bpm, page) {
-    if (page) {
+    if (page != nullptr) {
       guard_.page_->WLatch();
     }
   }

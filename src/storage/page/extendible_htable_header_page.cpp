@@ -28,7 +28,7 @@ void ExtendibleHTableHeaderPage::Init(uint32_t max_depth) {
 }
 
 auto ExtendibleHTableHeaderPage::HashToDirectoryIndex(uint32_t hash) const -> uint32_t {
-  if (!max_depth_) {
+  if (max_depth_ == 0U) {
     return 0;
   }
   uint32_t mask = ~((static_cast<uint32_t>(1) << (8 * HTABLE_HEADER_PAGE_METADATA_SIZE - max_depth_)) - 1);

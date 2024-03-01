@@ -62,14 +62,14 @@ auto DiskExtendibleHashTable<K, V, KC>::GetValue(const K &key, std::vector<V> *r
   auto d_page_id = header_page->GetDirectoryPageId(d_idx);
   // always allocate header page first, so page id 0 is not available in directory and bucket page
   // so I use page id == 0 to indicate empty
-  if (d_page_id) {
+  if (d_page_id != 0U) {
     // std::cout << "Find directory page " << d_page_id << std::endl;
     ReadPageGuard d_r_guard = bpm_->FetchPageRead(d_page_id);
     auto d_page = d_r_guard.As<ExtendibleHTableDirectoryPage>();
     uint32_t b_idx = d_page->HashToBucketIndex(hash);
     // std::cout << "Find bucket idx " << b_idx << std::endl;
     auto b_page_id = d_page->GetBucketPageId(b_idx);
-    if (b_page_id) {
+    if (b_page_id != 0U) {
       // std::cout << "Find bucket page " << b_page_id << std::endl;
       ReadPageGuard b_r_guard = bpm_->FetchPageRead(b_page_id);
       auto b_page = b_r_guard.As<ExtendibleHTableBucketPage<K, V, KC>>();
@@ -99,7 +99,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
   // std::cout << "d_idx = " << d_idx << std::endl;
 
   auto d_page_id = header_page->GetDirectoryPageId(d_idx);
-  if (d_page_id) {
+  if (d_page_id != 0U) {
     h_w_guard.Drop();  // after find directory, drop header guard
     // fetch directory page
     WritePageGuard d_w_guard = bpm_->FetchPageWrite(d_page_id);
@@ -109,7 +109,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
 
     uint32_t b_idx = d_page->HashToBucketIndex(hash);
     auto b_page_id = d_page->GetBucketPageId(b_idx);
-    if (b_page_id) {
+    if (b_page_id != 0U) {
       WritePageGuard b_w_guard = bpm_->FetchPageWrite(b_page_id);
       auto b_page = b_w_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
       // std::cout << "after find b_page_id " << b_page_id << std::endl;
@@ -119,7 +119,8 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
           // b_page->PrintBucket();
           // std::cout << "Insert " << key << " in b_idx " << b_idx << std::endl;
           return true;
-        } else if (b_page->IsFull()) {  // if bucket overflow
+        }
+        if (b_page->IsFull()) {  // if bucket overflow
           while (true) {
             if (d_page->GetGlobalDepth() == d_page->GetLocalDepth(b_idx)) {
               // local depth equal to global depth
@@ -258,19 +259,19 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
   uint32_t d_idx = header_page->HashToDirectoryIndex(hash);
   auto d_page_id = header_page->GetDirectoryPageId(d_idx);
   h_r_guard.Drop();  // early release
-  if (d_page_id) {
+  if (d_page_id != 0U) {
     WritePageGuard d_w_guard = bpm_->FetchPageWrite(d_page_id);  // directory is always need to write
     auto d_page = d_w_guard.AsMut<ExtendibleHTableDirectoryPage>();
     uint32_t b_idx = d_page->HashToBucketIndex(hash);
     auto b_page_id = d_page->GetBucketPageId(b_idx);
-    if (b_page_id) {
+    if (b_page_id != 0) {
       WritePageGuard b_w_guard = bpm_->FetchPageWrite(b_page_id);
       auto b_page = b_w_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
       if (b_page->Remove(key, cmp_)) {
         if (b_page->IsEmpty()) {  // if bucket is empty after remove
           // reverse highest bit that is image idx
           auto image_idx = b_idx ^ (static_cast<uint32_t>(1) << (d_page->GetLocalDepth(b_idx) - 1));
-          if (!(d_page->GetLocalDepth(b_idx)) || !(d_page->GetLocalDepth(image_idx))) {
+          if ((d_page->GetLocalDepth(b_idx) == 0U) || (d_page->GetLocalDepth(image_idx) == 0U)) {
             return true;
           }
           if (d_page->GetLocalDepth(b_idx) == d_page->GetLocalDepth(image_idx)) {

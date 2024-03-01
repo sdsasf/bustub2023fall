@@ -29,7 +29,8 @@ template <typename K, typename V, typename KC>
 auto ExtendibleHTableBucketPage<K, V, KC>::Lookup(const K &key, V &value, const KC &cmp) const -> bool {
   // binary search
   if (size_ > 0) {
-    uint32_t l = 0, r = size_ - 1;
+    uint32_t l = 0;
+    uint32_t r = size_ - 1;
     while (l < r) {
       uint32_t mid = l + (r - l) / 2;
       if (cmp(KeyAt(mid), key) < 0) {
@@ -57,7 +58,8 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Insert(const K &key, const V &value, 
   if (this->IsFull()) {
     return false;
   }
-  uint32_t l = 0, r = size_ - 1;
+  uint32_t l = 0;
+  uint32_t r = size_ - 1;
   if (size_ > 0) {
     while (l < r) {
       uint32_t mid = l + (r - l) / 2;
