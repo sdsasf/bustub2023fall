@@ -21,9 +21,10 @@ void ExtendibleHTableHeaderPage::Init(uint32_t max_depth) {
     throw Exception("header page max_depth is too big!");
   }
   max_depth_ = max_depth;
-  // if page id == 0, the page is not allocate
-  for (auto i = 0; i < (1 << max_depth_); ++i) {
-    directory_page_ids_[i] = 0;
+  // if page id == INVALID_PAGE_ID, the page is not allocate
+  uint32_t max_sz = MaxSize();
+  for (uint32_t i = 0; i < max_sz; ++i) {
+    SetDirectoryPageId(i, INVALID_PAGE_ID);
   }
 }
 
@@ -35,7 +36,7 @@ auto ExtendibleHTableHeaderPage::HashToDirectoryIndex(uint32_t hash) const -> ui
   return (hash & mask) >> (8 * HTABLE_HEADER_PAGE_METADATA_SIZE - max_depth_);
 }
 
-auto ExtendibleHTableHeaderPage::GetDirectoryPageId(uint32_t directory_idx) const -> uint32_t {
+auto ExtendibleHTableHeaderPage::GetDirectoryPageId(uint32_t directory_idx) const -> page_id_t {
   return directory_page_ids_[directory_idx];
 }
 

@@ -28,8 +28,10 @@ void ExtendibleHTableDirectoryPage::Init(uint32_t max_depth) {
   max_depth_ = max_depth;
   global_depth_ = 0;
   local_depths_[0] = 0;
-  // if page id == 0, the page is not allocate
-  memset(bucket_page_ids_, 0, sizeof(bucket_page_ids_));
+  uint32_t max_sz = MaxSize();
+  for (uint32_t i = 0; i < max_sz; ++i) {
+    SetBucketPageId(i, INVALID_PAGE_ID);
+  }
 }
 
 auto ExtendibleHTableDirectoryPage::HashToBucketIndex(uint32_t hash) const -> uint32_t {
@@ -82,6 +84,8 @@ auto ExtendibleHTableDirectoryPage::CanShrink() -> bool {
 }
 
 auto ExtendibleHTableDirectoryPage::Size() const -> uint32_t { return 1 << global_depth_; }
+
+auto ExtendibleHTableDirectoryPage::MaxSize() const -> uint32_t { return 1 << max_depth_; }
 
 auto ExtendibleHTableDirectoryPage::GetLocalDepth(uint32_t bucket_idx) const -> uint32_t {
   return local_depths_[bucket_idx];

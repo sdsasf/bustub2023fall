@@ -62,14 +62,14 @@ auto DiskExtendibleHashTable<K, V, KC>::GetValue(const K &key, std::vector<V> *r
   auto d_page_id = header_page->GetDirectoryPageId(d_idx);
   // always allocate header page first, so page id 0 is not available in directory and bucket page
   // so I use page id == 0 to indicate empty
-  if (d_page_id != 0U) {
+  if (d_page_id != INVALID_PAGE_ID) {
     // std::cout << "Find directory page " << d_page_id << std::endl;
     ReadPageGuard d_r_guard = bpm_->FetchPageRead(d_page_id);
     auto d_page = d_r_guard.As<ExtendibleHTableDirectoryPage>();
     uint32_t b_idx = d_page->HashToBucketIndex(hash);
     // std::cout << "Find bucket idx " << b_idx << std::endl;
     auto b_page_id = d_page->GetBucketPageId(b_idx);
-    if (b_page_id != 0U) {
+    if (b_page_id != INVALID_PAGE_ID) {
       // std::cout << "Find bucket page " << b_page_id << std::endl;
       ReadPageGuard b_r_guard = bpm_->FetchPageRead(b_page_id);
       auto b_page = b_r_guard.As<ExtendibleHTableBucketPage<K, V, KC>>();
@@ -98,8 +98,8 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
 
   // std::cout << "d_idx = " << d_idx << std::endl;
 
-  auto d_page_id = header_page->GetDirectoryPageId(d_idx);
-  if (d_page_id != 0U) {
+  page_id_t d_page_id = header_page->GetDirectoryPageId(d_idx);
+  if (d_page_id != INVALID_PAGE_ID) {
     h_w_guard.Drop();  // after find directory, drop header guard
     // fetch directory page
     WritePageGuard d_w_guard = bpm_->FetchPageWrite(d_page_id);
@@ -108,8 +108,8 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
     // std::cout << "after find d_page_id " << d_page_id << std::endl;
 
     uint32_t b_idx = d_page->HashToBucketIndex(hash);
-    auto b_page_id = d_page->GetBucketPageId(b_idx);
-    if (b_page_id != 0U) {
+    page_id_t b_page_id = d_page->GetBucketPageId(b_idx);
+    if (b_page_id != INVALID_PAGE_ID) {
       WritePageGuard b_w_guard = bpm_->FetchPageWrite(b_page_id);
       auto b_page = b_w_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
       // std::cout << "after find b_page_id " << b_page_id << std::endl;
@@ -253,35 +253,59 @@ void DiskExtendibleHashTable<K, V, KC>::UpdateDirectoryMapping(ExtendibleHTableD
 template <typename K, typename V, typename KC>
 auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transaction) -> bool {
   uint32_t hash = Hash(key);
+  std::cout << "remove key " << key << std::endl;
   ReadPageGuard h_r_guard = bpm_->FetchPageRead(header_page_id_);
   auto header_page = h_r_guard.As<ExtendibleHTableHeaderPage>();  // use read guard first
   uint32_t d_idx = header_page->HashToDirectoryIndex(hash);
-  auto d_page_id = header_page->GetDirectoryPageId(d_idx);
+  page_id_t d_page_id = header_page->GetDirectoryPageId(d_idx);
   h_r_guard.Drop();  // early release
-  if (d_page_id != 0U) {
+  if (d_page_id != INVALID_PAGE_ID) {
     WritePageGuard d_w_guard = bpm_->FetchPageWrite(d_page_id);  // directory is always need to write
     auto d_page = d_w_guard.AsMut<ExtendibleHTableDirectoryPage>();
+    std::cout << "Find directory page " << d_page_id << std::endl;
     uint32_t b_idx = d_page->HashToBucketIndex(hash);
-    auto b_page_id = d_page->GetBucketPageId(b_idx);
-    if (b_page_id != 0) {
+    page_id_t b_page_id = d_page->GetBucketPageId(b_idx);
+    if (b_page_id != INVALID_PAGE_ID) {
       WritePageGuard b_w_guard = bpm_->FetchPageWrite(b_page_id);
       auto b_page = b_w_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
+      std::cout << "Find bucket page " << b_page_id << std::endl;
       if (b_page->Remove(key, cmp_)) {
         if (b_page->IsEmpty()) {  // if bucket is empty after remove
-          // reverse highest bit that is image idx
-          auto image_idx = b_idx ^ (static_cast<uint32_t>(1) << (d_page->GetLocalDepth(b_idx) - 1));
-          if ((d_page->GetLocalDepth(b_idx) == 0U) || (d_page->GetLocalDepth(image_idx) == 0U)) {
-            return true;
+                                  // update directory map
+                                  // set b_page idx to INVALID_PAGE_ID
+          for (uint32_t i = (b_idx & d_page->GetLocalDepthMask(b_idx)); i < d_page->Size();
+               i += (1 << d_page->GetLocalDepth(b_idx))) {
+            d_page->SetBucketPageId(i, INVALID_PAGE_ID);
           }
-          if (d_page->GetLocalDepth(b_idx) == d_page->GetLocalDepth(image_idx)) {
-            for (auto i = (b_idx & d_page->GetLocalDepthMask(b_idx)); i < d_page->Size();
-                 i += (1 << d_page->GetLocalDepth(b_idx))) {
-              d_page->SetBucketPageId(i, image_idx);
-            }
-            d_page->DecrLocalDepth(b_idx);
-            d_page->DecrLocalDepth(image_idx);
-            if (d_page->CanShrink()) {
-              d_page->DecrGlobalDepth();
+          // relese empty bucket and delete page
+          b_w_guard.Drop();
+          bpm_->DeletePage(b_page_id);
+          if (d_page->GetLocalDepth(b_idx) != 0U) {
+            // reverse highest bit that is image idx
+            uint32_t image_idx = b_idx ^ (static_cast<uint32_t>(1) << (d_page->GetLocalDepth(b_idx) - 1));
+            while (d_page->GetLocalDepth(b_idx) == d_page->GetLocalDepth(image_idx)) {
+              // if local depth is not equal, can't merge
+              // idx point to either b_page or image page, update to point to image page and decrease local depth
+              for (auto i = (b_idx & (d_page->GetLocalDepthMask(b_idx) >> 1)); i < d_page->Size();
+                   i += (1 << (d_page->GetLocalDepth(b_idx) - 1))) {
+                d_page->SetBucketPageId(i, d_page->GetBucketPageId(image_idx));
+                // decrease every local depth that related
+                d_page->DecrLocalDepth(i);
+              }
+              while (d_page->CanShrink()) {
+                d_page->DecrGlobalDepth();
+              }
+              b_idx = image_idx;
+              if (d_page->GetLocalDepth(b_idx) == 0U) {
+                break;
+              }
+              // only local depth not equal to 0, it has split image !!
+              image_idx = b_idx ^ (static_cast<uint32_t>(1) << (d_page->GetLocalDepth(b_idx) - 1));
+              // either bucket or image must be empty, (equal to INVALID_PAGE_ID)
+              if ((d_page->GetBucketPageId(b_idx) != INVALID_PAGE_ID) &&
+                  (d_page->GetBucketPageId(image_idx) != INVALID_PAGE_ID)) {
+                break;
+              }
             }
           }
         }
