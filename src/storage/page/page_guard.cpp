@@ -16,6 +16,7 @@ void BasicPageGuard::Drop() {
     if (!(bpm_->UnpinPage(page_->GetPageId(), is_dirty_))) {
       throw Exception("unpin page error!");
     }
+    // std::cout << "Page " << page_->GetPageId() << " Pin count " << page_->GetPinCount() << std::endl;
   }
   bpm_ = nullptr;
   page_ = nullptr;
@@ -31,6 +32,8 @@ auto BasicPageGuard::operator=(BasicPageGuard &&that) noexcept -> BasicPageGuard
   is_dirty_ = that.is_dirty_;
   return *this;
 }
+
+auto BasicPageGuard::IsEmpty() -> bool { return page_ == nullptr; }
 
 BasicPageGuard::~BasicPageGuard() { this->Drop(); };  // NOLINT
 
@@ -62,10 +65,13 @@ auto ReadPageGuard::operator=(ReadPageGuard &&that) noexcept -> ReadPageGuard & 
 
 void ReadPageGuard::Drop() {
   if (guard_.page_ != nullptr) {
+    // std::cout << "Read page guard drop page " << guard_.page_->GetPageId() << std::endl;
     guard_.page_->RUnlatch();
   }
   guard_.Drop();
 }
+
+auto ReadPageGuard::IsEmpty() -> bool { return guard_.IsEmpty(); }
 
 ReadPageGuard::~ReadPageGuard() { this->Drop(); }  // NOLINT
 
@@ -81,10 +87,15 @@ auto WritePageGuard::operator=(WritePageGuard &&that) noexcept -> WritePageGuard
 
 void WritePageGuard::Drop() {
   if (guard_.page_ != nullptr) {
+    // std::cout << "Write page guard drop page " << guard_.page_->GetPageId() << std::endl;
+    // is necessary ??
+    // guard_.bpm_->FlushPage(guard_.page_->GetPageId());
     guard_.page_->WUnlatch();
   }
   guard_.Drop();
 }
+
+auto WritePageGuard::IsEmpty() -> bool { return guard_.IsEmpty(); }
 
 WritePageGuard::~WritePageGuard() { this->Drop(); }  // NOLINT
 

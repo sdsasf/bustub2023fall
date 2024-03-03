@@ -135,7 +135,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
             // allocate a new bucket page
             page_id_t image_b_page_id;
             BasicPageGuard image_b_page_guard = bpm_->NewPageGuarded(&image_b_page_id);
-            if (image_b_page_guard.GetData() == nullptr) {  // no free page in bufferpool
+            if (image_b_page_guard.IsEmpty()) {  // no free page in bufferpool
               return false;
             }
             WritePageGuard image_b_w_page_guard = image_b_page_guard.UpgradeWrite();  // get write lock befor write
@@ -188,7 +188,7 @@ auto DiskExtendibleHashTable<K, V, KC>::InsertToNewDirectory(ExtendibleHTableHea
                                                              uint32_t hash, const K &key, const V &value) -> bool {
   page_id_t d_page_id;
   BasicPageGuard new_d_page_guard = bpm_->NewPageGuarded(&d_page_id);
-  if (new_d_page_guard.GetData() == nullptr) {  // no free page in bufferpool
+  if (new_d_page_guard.IsEmpty()) {  // no free page in bufferpool
     return false;
   }
   auto new_d_w_page_guard = new_d_page_guard.UpgradeWrite();  // get write lock befor write
@@ -212,7 +212,7 @@ auto DiskExtendibleHashTable<K, V, KC>::InsertToNewBucket(ExtendibleHTableDirect
                                                           const K &key, const V &value) -> bool {
   page_id_t b_page_id;
   BasicPageGuard new_b_page_guard = bpm_->NewPageGuarded(&b_page_id);
-  if (new_b_page_guard.GetData() == nullptr) {  // no free page in bufferpool
+  if (new_b_page_guard.IsEmpty()) {  // no free page in bufferpool
     return false;
   }
   auto new_b_w_page_guard = new_b_page_guard.UpgradeWrite();  // get write lock befor write
@@ -301,10 +301,22 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
               }
               // only local depth not equal to 0, it has split image !!
               image_idx = b_idx ^ (static_cast<uint32_t>(1) << (d_page->GetLocalDepth(b_idx) - 1));
-              // either bucket or image must be empty, (equal to INVALID_PAGE_ID)
               if ((d_page->GetBucketPageId(b_idx) != INVALID_PAGE_ID) &&
                   (d_page->GetBucketPageId(image_idx) != INVALID_PAGE_ID)) {
-                break;
+                ReadPageGuard b_page_guard = bpm_->FetchPageRead(d_page->GetBucketPageId(b_idx));
+                auto temp_b_page = b_page_guard.As<ExtendibleHTableBucketPage<K, V, KC>>();
+                ReadPageGuard image_b_page_guard = bpm_->FetchPageRead(d_page->GetBucketPageId(image_idx));
+                auto temp_image_b_page = image_b_page_guard.As<ExtendibleHTableBucketPage<K, V, KC>>();
+                // either bucket or image must be empty
+                if (temp_b_page->IsEmpty() || temp_image_b_page->IsEmpty()) {
+                  if (temp_image_b_page->IsEmpty()) {
+                    uint32_t t = b_idx;
+                    b_idx = image_idx;
+                    image_idx = b_idx;
+                  }
+                } else {
+                  break;
+                }
               }
             }
           }

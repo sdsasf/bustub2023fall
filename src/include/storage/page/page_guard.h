@@ -87,6 +87,8 @@ class BasicPageGuard {
 
   auto GetData() -> const char * { return page_->GetData(); }
 
+  auto IsEmpty() -> bool;
+
   template <class T>
   auto As() -> const T * {
     return reinterpret_cast<const T *>(GetData());
@@ -165,6 +167,8 @@ class ReadPageGuard {
 
   auto GetData() -> const char * { return guard_.GetData(); }
 
+  auto IsEmpty() -> bool;
+
   template <class T>
   auto As() -> const T * {
     return guard_.As<T>();
@@ -228,6 +232,8 @@ class WritePageGuard {
   auto PageId() -> page_id_t { return guard_.PageId(); }
 
   auto GetData() -> const char * { return guard_.GetData(); }
+
+  auto IsEmpty() -> bool;
 
   template <class T>
   auto As() -> const T * {
