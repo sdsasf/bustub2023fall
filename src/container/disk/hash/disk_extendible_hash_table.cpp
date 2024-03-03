@@ -312,7 +312,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
                   if (temp_image_b_page->IsEmpty()) {
                     uint32_t t = b_idx;
                     b_idx = image_idx;
-                    image_idx = b_idx;
+                    image_idx = t;
                   }
                 } else {
                   break;
