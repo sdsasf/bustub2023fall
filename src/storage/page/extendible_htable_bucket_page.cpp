@@ -79,7 +79,7 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Insert(const K &key, const V &value, 
       array_[j + 1] = array_[j];
     }
   }
-  array_[l] = std::move(std::make_pair(key, value));
+  array_[l] = std::pair<K, V>{key, value};
   ++size_;
   return true;
 }

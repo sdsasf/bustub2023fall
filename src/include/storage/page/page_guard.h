@@ -85,7 +85,12 @@ class BasicPageGuard {
 
   auto PageId() -> page_id_t { return page_->GetPageId(); }
 
-  auto GetData() -> const char * { return page_->GetData(); }
+  auto GetData() -> const char * {
+    if (page_ == nullptr) {
+      return nullptr;
+    }
+    return page_->GetData();
+  }
 
   auto IsEmpty() -> bool;
 
@@ -95,6 +100,9 @@ class BasicPageGuard {
   }
 
   auto GetDataMut() -> char * {
+    if (page_ == nullptr) {
+      return nullptr;
+    }
     is_dirty_ = true;
     return page_->GetData();
   }

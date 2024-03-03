@@ -92,18 +92,31 @@ template <typename K, typename V, typename KC>
 auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Transaction *transaction) -> bool {
   V v;
   uint32_t hash = Hash(key);
+  // As should follow fetch right behind
+  // Because As modify is_dirty in guard
+  // is_dirty is saved in every page guard, determine if it should write back to disk during unpin()
+  // unpin() modify is_dirty is page struct
   WritePageGuard h_w_guard = bpm_->FetchPageWrite(header_page_id_);
   auto header_page = h_w_guard.AsMut<ExtendibleHTableHeaderPage>();
+  // if there is no free page is bpm, guard.page_ is nullptr(confuse me for a week !!!!!!!!)
+  // As use page_->GetData directly !!!!
+  if (!header_page) {
+    // this shouldn't happen !!
+    std::cout << "There is no free space in bpm, can't fetch header page!" << std::endl;
+    return false;
+  }
   uint32_t d_idx = header_page->HashToDirectoryIndex(hash);
-
-  // std::cout << "d_idx = " << d_idx << std::endl;
-
   page_id_t d_page_id = header_page->GetDirectoryPageId(d_idx);
   if (d_page_id != INVALID_PAGE_ID) {
     h_w_guard.Drop();  // after find directory, drop header guard
     // fetch directory page
     WritePageGuard d_w_guard = bpm_->FetchPageWrite(d_page_id);
     auto d_page = d_w_guard.AsMut<ExtendibleHTableDirectoryPage>();
+    if (!d_page) {
+      // this shouldn't happen !!
+      std::cout << "There is no free space in bpm, can't fetch directory page!" << std::endl;
+      return false;
+    }
     // test
     // std::cout << "after find d_page_id " << d_page_id << std::endl;
 
@@ -112,10 +125,14 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
     if (b_page_id != INVALID_PAGE_ID) {
       WritePageGuard b_w_guard = bpm_->FetchPageWrite(b_page_id);
       auto b_page = b_w_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
+      if (!b_page) {
+        // this shouldn't happen !!
+        std::cout << "There is no free space in bpm, can't fetch bucket page!" << std::endl;
+        return false;
+      }
       // std::cout << "after find b_page_id " << b_page_id << std::endl;
       if (!(b_page->Lookup(key, v, cmp_))) {
         if (b_page->Insert(key, value, cmp_)) {
-          // for test
           // b_page->PrintBucket();
           // std::cout << "Insert " << key << " in b_idx " << b_idx << std::endl;
           return true;
@@ -123,7 +140,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
         if (b_page->IsFull()) {  // if bucket overflow
           while (true) {
             if (d_page->GetGlobalDepth() == d_page->GetLocalDepth(b_idx)) {
-              // local depth equal to global depth
+              // if local depth equal to global depth
               if (d_page->GetGlobalDepth() < directory_max_depth_) {
                 d_page->IncrGlobalDepth();
                 // std::cout << "global depth " << d_page->GetGlobalDepth() << std::endl;
@@ -136,6 +153,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
             page_id_t image_b_page_id;
             BasicPageGuard image_b_page_guard = bpm_->NewPageGuarded(&image_b_page_id);
             if (image_b_page_guard.IsEmpty()) {  // no free page in bufferpool
+              std::cout << "There is no free space in bpm, can't allocate image bucket page!" << std::endl;
               return false;
             }
             WritePageGuard image_b_w_page_guard = image_b_page_guard.UpgradeWrite();  // get write lock befor write
@@ -154,6 +172,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
                                    d_page->GetLocalDepth(b_idx) + 1, d_page->GetLocalDepthMask(b_idx));
 
             // std::cout << "new local depth " << d_page->GetLocalDepth(b_idx) <<std::endl;
+            // drop bucket and image bucket
             image_b_w_page_guard.Drop();
             b_w_guard.Drop();
             // try insert after bucket split, may be fail again !!!
@@ -161,6 +180,11 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
             b_page_id = d_page->GetBucketPageId(b_idx);  // get new bucket
             b_w_guard = bpm_->FetchPageWrite(b_page_id);
             b_page = b_w_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
+            if (!b_page) {
+              // this shouldn't happen !!
+              std::cout << "There is no free space in bpm, can't fetch bucket page!" << std::endl;
+              return false;
+            }
             if (b_page->Insert(key, value, cmp_)) {
               // std::cout << "Insert " << key << "in bucket_idx " << b_idx << std::endl;
               return true;
@@ -253,7 +277,6 @@ void DiskExtendibleHashTable<K, V, KC>::UpdateDirectoryMapping(ExtendibleHTableD
 template <typename K, typename V, typename KC>
 auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transaction) -> bool {
   uint32_t hash = Hash(key);
-  std::cout << "remove key " << key << std::endl;
   ReadPageGuard h_r_guard = bpm_->FetchPageRead(header_page_id_);
   auto header_page = h_r_guard.As<ExtendibleHTableHeaderPage>();  // use read guard first
   uint32_t d_idx = header_page->HashToDirectoryIndex(hash);
@@ -262,14 +285,15 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
   if (d_page_id != INVALID_PAGE_ID) {
     WritePageGuard d_w_guard = bpm_->FetchPageWrite(d_page_id);  // directory is always need to write
     auto d_page = d_w_guard.AsMut<ExtendibleHTableDirectoryPage>();
-    std::cout << "Find directory page " << d_page_id << std::endl;
+    // std::cout << "Find directory page " << d_page_id << std::endl;
     uint32_t b_idx = d_page->HashToBucketIndex(hash);
     page_id_t b_page_id = d_page->GetBucketPageId(b_idx);
     if (b_page_id != INVALID_PAGE_ID) {
       WritePageGuard b_w_guard = bpm_->FetchPageWrite(b_page_id);
       auto b_page = b_w_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
-      std::cout << "Find bucket page " << b_page_id << std::endl;
+      // std::cout << "Find bucket page " << b_page_id << std::endl;
       if (b_page->Remove(key, cmp_)) {
+        std::cout << "remove key " << key << "in page " << b_page_id << std::endl;
         if (b_page->IsEmpty()) {  // if bucket is empty after remove
                                   // update directory map
                                   // set b_page idx to INVALID_PAGE_ID
