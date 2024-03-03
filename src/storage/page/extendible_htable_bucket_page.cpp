@@ -58,9 +58,11 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Insert(const K &key, const V &value, 
   if (this->IsFull()) {
     return false;
   }
-  uint32_t l = 0;
-  uint32_t r = size_ - 1;
-  if (size_ > 0) {
+  if (size_ == 0U) {
+    array_[0] = std::make_pair(key, value);
+  } else {
+    uint32_t l = 0;
+    uint32_t r = size_ - 1;
     while (l < r) {
       uint32_t mid = l + (r - l) / 2;
       if (cmp(KeyAt(mid), key) < 0) {
@@ -75,11 +77,15 @@ auto ExtendibleHTableBucketPage<K, V, KC>::Insert(const K &key, const V &value, 
     if (cmp(KeyAt(l), key) < 0) {
       ++l;
     }
-    for (uint32_t j = size_ - 1; j >= l; --j) {
-      array_[j + 1] = array_[j];
+    // have bug, but why ????? Aren't they the same
+    /*for (uint32_t i = (size_ - 1); i >= l; --i) {
+      array_[i + 1] = array_[i];
+    }*/
+    for (uint32_t i = size_; i > l; --i) {
+      array_[i] = array_[i - 1];
     }
+    array_[l] = std::make_pair(key, value);
   }
-  array_[l] = std::pair<K, V>{key, value};
   ++size_;
   return true;
 }
