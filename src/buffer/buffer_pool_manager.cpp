@@ -207,7 +207,7 @@ auto BufferPoolManager::FetchPageWrite(page_id_t page_id) -> WritePageGuard {
 
 auto BufferPoolManager::NewPageGuarded(page_id_t *page_id) -> BasicPageGuard {
   Page *p = NewPage(page_id);
-  if (p) {
+  if (p != nullptr) {
     // std::cout << "New page guarded  " << *page_id << std::endl;
   }
   // if there is no free page, page guard page is nullptr
