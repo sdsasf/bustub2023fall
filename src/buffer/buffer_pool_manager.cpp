@@ -191,7 +191,7 @@ auto BufferPoolManager::FetchPageRead(page_id_t page_id) -> ReadPageGuard {
   if (p == nullptr) {
     throw Exception("can't fetch page");
   }
-  std::cout << "Fectch page read  " << page_id << " Pin count " << p->GetPinCount() << std::endl;
+  // std::cout << "Fectch page read  " << page_id << " Pin count " << p->GetPinCount() << std::endl;
   return {this, p};
 }
 
@@ -201,15 +201,15 @@ auto BufferPoolManager::FetchPageWrite(page_id_t page_id) -> WritePageGuard {
   if (p == nullptr) {
     throw Exception("can't fetch page");
   }
-  std::cout << "Fectch page write  " << page_id << " Pin count " << p->GetPinCount() << std::endl;
+  // std::cout << "Fectch page write  " << page_id << " Pin count " << p->GetPinCount() << std::endl;
   return {this, p};
 }
 
 auto BufferPoolManager::NewPageGuarded(page_id_t *page_id) -> BasicPageGuard {
   Page *p = NewPage(page_id);
-  if (p != nullptr) {
+  /*if (p != nullptr) {
     std::cout << "allocate new page " << *page_id << std::endl;
-  }
+  }*/
   // if there is no free page, page guard page is nullptr
   return {this, p};
 }

@@ -134,7 +134,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
       if (!(b_page->Lookup(key, v, cmp_))) {
         if (b_page->Insert(key, value, cmp_)) {
           // b_page->PrintBucket();
-          // std::cout << "Insert " << key << " in b_idx " << b_idx << std::endl;
+          std::cout << "Insert key " << key << " to page " << b_page_id << std::endl;
           return true;
         }
         if (b_page->IsFull()) {  // if bucket overflow
@@ -220,9 +220,6 @@ auto DiskExtendibleHashTable<K, V, KC>::InsertToNewDirectory(ExtendibleHTableHea
   new_d_page->Init(directory_max_depth_);  // Init first
   if (this->InsertToNewBucket(new_d_page, hash & new_d_page->GetGlobalDepthMask(), key, value)) {
     header->SetDirectoryPageId(directory_idx, d_page_id);  // Insert into header page
-                                                           // header->IncrSize();
-                                                           // only for test
-                                                           // new_d_page->PrintDirectory();
     // std::cout << "Insert new directory idx = " << directory_idx << std::endl;
     return true;
   }
@@ -250,7 +247,7 @@ auto DiskExtendibleHashTable<K, V, KC>::InsertToNewBucket(ExtendibleHTableDirect
   // new_b_page->PrintBucket();
 
   // std::cout << "Insert new bucket idx = " << bucket_idx << std::endl;
-  // std::cout << "Insert " << key << " in bucket_idx " << bucket_idx << std::endl;
+  std::cout << "Insert key " << key << " to page " << directory->GetBucketPageId(bucket_idx) << std::endl;
   return true;
 }
 
@@ -293,7 +290,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
       auto b_page = b_w_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
       // std::cout << "Find bucket page " << b_page_id << std::endl;
       if (b_page->Remove(key, cmp_)) {
-        std::cout << "remove key " << key << "in page " << b_page_id << std::endl;
+        std::cout << "remove key " << key << " in page " << b_page_id << std::endl;
         if (b_page->IsEmpty()) {  // if bucket is empty after remove
                                   // update directory map
                                   // set b_page idx to INVALID_PAGE_ID

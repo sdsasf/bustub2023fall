@@ -4,10 +4,13 @@
 namespace bustub {
 
 BasicPageGuard::BasicPageGuard(BasicPageGuard &&that) noexcept {
-  bpm_ = that.bpm_;
+  // Solve self-assignment
+  auto bpm = that.bpm_;
+  auto page = that.page_;
   that.bpm_ = nullptr;
-  page_ = that.page_;
   that.page_ = nullptr;
+  bpm_ = bpm;
+  page_ = page;
   is_dirty_ = that.is_dirty_;
 }
 
@@ -16,7 +19,7 @@ void BasicPageGuard::Drop() {
     if (!(bpm_->UnpinPage(page_->GetPageId(), is_dirty_))) {
       throw Exception("unpin page error!");
     }
-    std::cout << "Unpin page " << page_->GetPageId() << " Pin count " << page_->GetPinCount() << std::endl;
+    // std::cout << "Unpin page " << page_->GetPageId() << " Pin count " << page_->GetPinCount() << std::endl;
   }
   bpm_ = nullptr;
   page_ = nullptr;
@@ -24,11 +27,14 @@ void BasicPageGuard::Drop() {
 }
 
 auto BasicPageGuard::operator=(BasicPageGuard &&that) noexcept -> BasicPageGuard & {
+  // Solve self-assignment
+  auto bpm = that.bpm_;
+  auto page = that.page_;
   this->Drop();
-  bpm_ = that.bpm_;
   that.bpm_ = nullptr;
-  page_ = that.page_;
   that.page_ = nullptr;
+  bpm_ = bpm;
+  page_ = page;
   is_dirty_ = that.is_dirty_;
   return *this;
 }
@@ -56,8 +62,10 @@ auto BasicPageGuard::UpgradeWrite() -> WritePageGuard {
 ReadPageGuard::ReadPageGuard(ReadPageGuard &&that) noexcept { guard_ = std::move(that.guard_); }
 
 auto ReadPageGuard::operator=(ReadPageGuard &&that) noexcept -> ReadPageGuard & {
-  this->Drop();
-  guard_ = std::move(that.guard_);
+  if (this != &that) {
+    this->Drop();
+    guard_ = std::move(that.guard_);
+  }
   return *this;
 }
 
@@ -76,8 +84,10 @@ ReadPageGuard::~ReadPageGuard() { this->Drop(); }  // NOLINT
 WritePageGuard::WritePageGuard(WritePageGuard &&that) noexcept { guard_ = std::move(that.guard_); }
 
 auto WritePageGuard::operator=(WritePageGuard &&that) noexcept -> WritePageGuard & {
-  this->Drop();
-  guard_ = std::move(that.guard_);
+  if (this != &that) {
+    this->Drop();
+    guard_ = std::move(that.guard_);
+  }
   return *this;
 }
 
