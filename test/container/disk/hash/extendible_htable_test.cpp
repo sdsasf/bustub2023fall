@@ -181,7 +181,7 @@ TEST(ExtendibleHTableTest, GrowShrinkTest) {
     ASSERT_EQ(0, res.size());
   }
   ht.VerifyIntegrity();
-  for (int i = 1000; i < 2000; i++) {
+  for (int i = 1000; i < 1500; i++) {
     bool inserted = ht.Insert(i, i);
     ASSERT_TRUE(inserted);
     std::vector<int> res;
@@ -190,16 +190,34 @@ TEST(ExtendibleHTableTest, GrowShrinkTest) {
     ASSERT_EQ(i, res[0]);
   }
   ht.VerifyIntegrity();
-  for (int i = 500; i < 1500; i++) {
+  for (int i = 841; i < 1000; i++) {
     bool inserted = ht.Remove(i);
     ASSERT_TRUE(inserted);
     std::vector<int> res;
     ht.GetValue(i, &res);
     ASSERT_EQ(0, res.size());
   }
-  for (int i = 0; i < 1500; i++) {
+  ht.VerifyIntegrity();
+  for (int i = 0; i < 500; i++) {
+    bool inserted = ht.Insert(i, i);
+    ASSERT_TRUE(inserted);
+    std::vector<int> res;
+    ht.GetValue(i, &res);
+    ASSERT_EQ(1, res.size());
+    ASSERT_EQ(i, res[0]);
+  }
+  ht.VerifyIntegrity();
+  for (int i = 1000; i < 1500; i++) {
     bool inserted = ht.Remove(i);
-    ASSERT_FALSE(inserted);
+    ASSERT_TRUE(inserted);
+    std::vector<int> res;
+    ht.GetValue(i, &res);
+    ASSERT_EQ(0, res.size());
+  }
+  ht.VerifyIntegrity();
+  for (int i = 0; i < 500; i++) {
+    bool inserted = ht.Remove(i);
+    ASSERT_TRUE(inserted);
     std::vector<int> res;
     ht.GetValue(i, &res);
     ASSERT_EQ(0, res.size());

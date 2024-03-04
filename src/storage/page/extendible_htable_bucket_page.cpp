@@ -143,6 +143,11 @@ auto ExtendibleHTableBucketPage<K, V, KC>::IsEmpty() const -> bool {
   return (size_ == 0);
 }
 
+template <typename K, typename V, typename KC>
+void ExtendibleHTableBucketPage<K, V, KC>::Clear() {
+  size_ = 0;
+}
+
 template class ExtendibleHTableBucketPage<int, int, IntComparator>;
 template class ExtendibleHTableBucketPage<GenericKey<4>, RID, GenericComparator<4>>;
 template class ExtendibleHTableBucketPage<GenericKey<8>, RID, GenericComparator<8>>;

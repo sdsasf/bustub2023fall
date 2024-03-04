@@ -98,7 +98,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
   // unpin() modify is_dirty is page struct
   WritePageGuard h_w_guard = bpm_->FetchPageWrite(header_page_id_);
   auto header_page = h_w_guard.AsMut<ExtendibleHTableHeaderPage>();
-  // if there is no free page is bpm, guard.page_ is nullptr(confuse me for a week !!!!!!!!)
+  // if there is no free page in bpm, guard.page_ is nullptr(confuse me for a week !!!!!!!!)
   // As use page_->GetData directly !!!!
   if (!header_page) {
     // this shouldn't happen !!
@@ -157,22 +157,41 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
               return false;
             }
             WritePageGuard image_b_w_page_guard = image_b_page_guard.UpgradeWrite();  // get write lock befor write
-            // can't use image_b_page_guard
             auto image_b_page = image_b_w_page_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
             image_b_page->Init(bucket_max_size_);  // Init first
-            MigrateEntries(b_page, image_b_page, d_page->GetSplitImageIndex(b_idx),
-                           d_page->GetLocalDepthMask(b_page_id));
-            // std::cout << "split page " << b_idx << " and image page " << d_page->GetSplitImageIndex(b_idx) <<
-            // std::endl;
 
-            // image_b_page->PrintBucket();
-            // b_page->PrintBucket();
-
-            UpdateDirectoryMapping(d_page, d_page->GetSplitImageIndex(b_idx), image_b_page_id,
-                                   d_page->GetLocalDepth(b_idx) + 1, d_page->GetLocalDepthMask(b_idx));
-
-            d_page->PrintDirectory();
+            // Update directory map first
+            // cache old local depth and mask
+            uint32_t local_depth = d_page->GetLocalDepth(b_idx);
+            uint32_t local_depth_mask = d_page->GetLocalDepthMask(b_idx);
+            uint32_t high_bit = 1 << local_depth;
+            uint32_t image_b_idx = d_page->GetSplitImageIndex(b_idx);
+            for (uint32_t i = (b_idx & local_depth_mask); i < d_page->Size(); i += high_bit) {
+              if ((i & high_bit) == (image_b_idx & high_bit)) {
+                d_page->SetBucketPageId(i, image_b_page_id);
+              }
+              // image bucket page and bucket page local depth + 1
+              d_page->SetLocalDepth(i, local_depth + 1);
+            }
+            // finish update directory mapping
+            // copy all entries in b_page
+            std::list<std::pair<K, V>> entries;
+            for (uint32_t i = 0; i < b_page->Size(); ++i) {
+              entries.push_back(b_page->EntryAt(i));
+            }
+            b_page->Clear();
+            for (auto entry : entries) {
+              uint32_t target_idx = d_page->HashToBucketIndex(Hash(entry.first));
+              page_id_t target_page_id = d_page->GetBucketPageId(target_idx);
+              assert(target_page_id == b_page_id || target_page_id == image_b_page_id);
+              if (target_page_id == b_page_id) {
+                b_page->Insert(entry.first, entry.second, cmp_);
+              } else if (target_page_id == image_b_page_id) {
+                image_b_page->Insert(entry.first, entry.second, cmp_);
+              }
+            }
             std::cout << "------------------------------" << std::endl;
+            std::cout << "After split page " << std::endl;
             for (uint32_t i = 0; i < d_page->Size(); ++i) {
               std::cout << i << "   " << d_page->GetBucketPageId(i) << " local depth " << d_page->GetLocalDepth(i)
                         << std::endl;
@@ -348,6 +367,13 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
               }
             }
           }
+          std::cout << "------------------------------" << std::endl;
+          std::cout << "After merge page " << std::endl;
+          for (uint32_t i = 0; i < d_page->Size(); ++i) {
+            std::cout << i << "   " << d_page->GetBucketPageId(i) << " local depth " << d_page->GetLocalDepth(i)
+                      << std::endl;
+          }
+          std::cout << "------------------------------" << std::endl;
         }
         // b_page->PrintBucket();
         return true;
