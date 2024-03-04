@@ -171,6 +171,13 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
             UpdateDirectoryMapping(d_page, d_page->GetSplitImageIndex(b_idx), image_b_page_id,
                                    d_page->GetLocalDepth(b_idx) + 1, d_page->GetLocalDepthMask(b_idx));
 
+            d_page->PrintDirectory();
+            std::cout << "------------------------------" << std::endl;
+            for (uint32_t i = 0; i < d_page->Size(); ++i) {
+              std::cout << i << "   " << d_page->GetBucketPageId(i) << " local depth " << d_page->GetLocalDepth(i)
+                        << std::endl;
+            }
+            std::cout << "------------------------------" << std::endl;
             // std::cout << "new local depth " << d_page->GetLocalDepth(b_idx) <<std::endl;
             // drop bucket and image bucket
             image_b_w_page_guard.Drop();
@@ -186,7 +193,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
               return false;
             }
             if (b_page->Insert(key, value, cmp_)) {
-              // std::cout << "Insert " << key << "in bucket_idx " << b_idx << std::endl;
+              std::cout << "Insert key " << key << " in page " << b_page_id << std::endl;
               return true;
             }
           }
@@ -299,8 +306,8 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
             d_page->SetBucketPageId(i, INVALID_PAGE_ID);
           }
           // relese empty bucket and delete page
-          b_w_guard.Drop();
           bpm_->DeletePage(b_page_id);
+          b_w_guard.Drop();
           if (d_page->GetLocalDepth(b_idx) != 0U) {
             // reverse highest bit that is image idx
             uint32_t image_idx = b_idx ^ (static_cast<uint32_t>(1) << (d_page->GetLocalDepth(b_idx) - 1));
@@ -342,6 +349,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
             }
           }
         }
+        // b_page->PrintBucket();
         return true;
       }
     }
@@ -356,9 +364,14 @@ void DiskExtendibleHashTable<K, V, KC>::MigrateEntries(ExtendibleHTableBucketPag
                                                        uint32_t local_depth_mask) {  // note overflow
   uint32_t new_local_depth_mask = (local_depth_mask << 1) + 1;
   uint32_t sz = old_bucket->Size();
+  // remove array entry directly, the index i will invalid
   for (uint32_t i = 0; i < sz; ++i) {
     if ((Hash(old_bucket->KeyAt(i)) & new_local_depth_mask) == (new_bucket_idx & new_local_depth_mask)) {
       new_bucket->Insert(old_bucket->KeyAt(i), old_bucket->ValueAt(i), cmp_);
+    }
+  }
+  for (uint32_t i = 0; i < sz; ++i) {
+    if ((Hash(old_bucket->KeyAt(i)) & new_local_depth_mask) == (new_bucket_idx & new_local_depth_mask)) {
       old_bucket->RemoveAt(i);
     }
   }
