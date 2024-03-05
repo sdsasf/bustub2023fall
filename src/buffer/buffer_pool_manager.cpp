@@ -188,8 +188,8 @@ auto BufferPoolManager::FetchPageBasic(page_id_t page_id) -> BasicPageGuard {
 
 auto BufferPoolManager::FetchPageRead(page_id_t page_id) -> ReadPageGuard {
   Page *p = FetchPage(page_id);
-  if (p == nullptr) {
-    throw Exception("can't fetch page");
+  if (p != nullptr) {
+    p->RLatch();
   }
   // std::cout << "Fectch page read  " << page_id << " Pin count " << p->GetPinCount() << std::endl;
   return {this, p};
@@ -197,9 +197,8 @@ auto BufferPoolManager::FetchPageRead(page_id_t page_id) -> ReadPageGuard {
 
 auto BufferPoolManager::FetchPageWrite(page_id_t page_id) -> WritePageGuard {
   Page *p = FetchPage(page_id);
-
-  if (p == nullptr) {
-    throw Exception("can't fetch page");
+  if (p != nullptr) {
+    p->WLatch();
   }
   // std::cout << "Fectch page write  " << page_id << " Pin count " << p->GetPinCount() << std::endl;
   return {this, p};

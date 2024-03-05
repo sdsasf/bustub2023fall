@@ -318,54 +318,43 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
       if (b_page->Remove(key, cmp_)) {
         std::cout << "remove key " << key << " in page " << b_page_id << std::endl;
         if (b_page->IsEmpty()) {  // if bucket is empty after remove
-                                  // update directory map
-                                  // set b_page idx to INVALID_PAGE_ID
-          for (uint32_t i = (b_idx & d_page->GetLocalDepthMask(b_idx)); i < d_page->Size();
-               i += (1 << d_page->GetLocalDepth(b_idx))) {
-            d_page->SetBucketPageId(i, INVALID_PAGE_ID);
-          }
-          // relese empty bucket and delete page
-          bpm_->DeletePage(b_page_id);
-          b_w_guard.Drop();
-          if (d_page->GetLocalDepth(b_idx) != 0U) {
+          while (true) {
+            // only local depth not equal to 0, it has split image !!
+            if (d_page->GetLocalDepth(b_idx) == 0U) {
+              break;
+            }
             // reverse highest bit that is image idx
             uint32_t image_idx = b_idx ^ (static_cast<uint32_t>(1) << (d_page->GetLocalDepth(b_idx) - 1));
-            while (d_page->GetLocalDepth(b_idx) == d_page->GetLocalDepth(image_idx)) {
+            if (d_page->GetLocalDepth(b_idx) != d_page->GetLocalDepth(image_idx)) {
               // if local depth is not equal, can't merge
-              // idx point to either b_page or image page, update to point to image page and decrease local depth
-              for (auto i = (b_idx & (d_page->GetLocalDepthMask(b_idx) >> 1)); i < d_page->Size();
-                   i += (1 << (d_page->GetLocalDepth(b_idx) - 1))) {
-                d_page->SetBucketPageId(i, d_page->GetBucketPageId(image_idx));
-                // decrease every local depth that related
-                d_page->DecrLocalDepth(i);
-              }
-              while (d_page->CanShrink()) {
-                d_page->DecrGlobalDepth();
-              }
-              b_idx = image_idx;
-              if (d_page->GetLocalDepth(b_idx) == 0U) {
-                break;
-              }
-              // only local depth not equal to 0, it has split image !!
-              image_idx = b_idx ^ (static_cast<uint32_t>(1) << (d_page->GetLocalDepth(b_idx) - 1));
-              if ((d_page->GetBucketPageId(b_idx) != INVALID_PAGE_ID) &&
-                  (d_page->GetBucketPageId(image_idx) != INVALID_PAGE_ID)) {
-                ReadPageGuard b_page_guard = bpm_->FetchPageRead(d_page->GetBucketPageId(b_idx));
-                auto temp_b_page = b_page_guard.As<ExtendibleHTableBucketPage<K, V, KC>>();
-                ReadPageGuard image_b_page_guard = bpm_->FetchPageRead(d_page->GetBucketPageId(image_idx));
-                auto temp_image_b_page = image_b_page_guard.As<ExtendibleHTableBucketPage<K, V, KC>>();
-                // either bucket or image must be empty
-                if (temp_b_page->IsEmpty() || temp_image_b_page->IsEmpty()) {
-                  if (temp_image_b_page->IsEmpty()) {
-                    uint32_t t = b_idx;
-                    b_idx = image_idx;
-                    image_idx = t;
-                  }
-                } else {
-                  break;
-                }
-              }
+              break;
             }
+            // if have image page, fetch image page
+            uint32_t image_page_id = d_page->GetBucketPageId(image_idx);
+            WritePageGuard image_page_guard = bpm_->FetchPageWrite(image_page_id);
+            auto image_page = image_page_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
+            if (!image_page->IsEmpty() && !b_page->IsEmpty()) {
+              break;
+            }
+            // migrate entry to b_page
+            for (uint32_t i = 0; i < image_page->Size(); ++i) {
+              std::pair<K, V> entry = image_page->EntryAt(i);
+              b_page->Insert(entry.first, entry.second, cmp_);
+            }
+            image_page->Clear();
+            image_page_guard.Drop();
+            // update mapping
+            uint32_t new_local_depth_mask = d_page->GetLocalDepthMask(b_idx) >> 1;
+            uint32_t new_high_bit = 1 << (d_page->GetLocalDepth(b_idx) - 1);
+            // idx point to either b_page or image page, update to point to image page and decrease local depth
+            for (uint32_t i = (b_idx & new_local_depth_mask); i < d_page->Size(); i += new_high_bit) {
+              d_page->SetBucketPageId(i, b_page_id);
+              // decrease every local depth that related
+              d_page->DecrLocalDepth(i);
+            }
+          }
+          while (d_page->CanShrink()) {
+            d_page->DecrGlobalDepth();
           }
           std::cout << "------------------------------" << std::endl;
           std::cout << "After merge page " << std::endl;
