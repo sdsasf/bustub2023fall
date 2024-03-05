@@ -47,7 +47,6 @@ auto BasicPageGuard::UpgradeRead() -> ReadPageGuard {
   page_ = nullptr;
   return read_page_guard;
   /*ReadPageGuard r_guard(this->bpm_, this->page_);
-  // r_guard.guard_.is_dirty_ = is_dirty_;
   bpm_ = nullptr;
   page_ = nullptr;
   return r_guard;*/
@@ -62,7 +61,6 @@ auto BasicPageGuard::UpgradeWrite() -> WritePageGuard {
   page_ = nullptr;
   return write_page_guard;
   /*WritePageGuard w_guard(this->bpm_, this->page_);
-  // r_guard.guard_.is_dirty_ = is_dirty_;
   bpm_ = nullptr;
   page_ = nullptr;
   return w_guard;*/
