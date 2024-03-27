@@ -154,6 +154,14 @@ void WindowFunctionExecutor::Init() {
 
           // have got aggregate value
           std::vector<Value> values;
+          /*
+           * If it is this window function column, the value is the aggregation value
+           * If it is not a window function column, the value should be from the child tuple
+           * If it is another window function column and tuple have insert into tuples_, keep it
+           * Else, the tuple haven't been inserted, can't use GetValue(will segment fault!!) let's populate a default
+           * value
+           *
+           */
           for (uint32_t i = 0; i < GetOutputSchema().GetColumnCount(); ++i) {
             if (i == curr_column_idx) {
               values.push_back(aggregate_value);
@@ -181,6 +189,8 @@ void WindowFunctionExecutor::Init() {
           for (uint32_t i = 0; i < GetOutputSchema().GetColumnCount(); ++i) {
             if (i == curr_column_idx) {
               ++global_rank;
+              // if it is first group, the iter-1 will segment fault, so must add local_rank == 0U condition
+              // !Equal(iter, iter-1) means change group
               if (local_rank == 0U || !Equal(&(*iter), &(*(iter - 1)), window_func.order_by_)) {
                 local_rank = global_rank;
               }
