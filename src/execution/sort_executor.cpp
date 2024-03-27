@@ -16,7 +16,6 @@ void SortExecutor::Init() {
   while (child_executor_->Next(&temp_tuple, &temp_rid)) {
     tuples_.push_back(temp_tuple);
   }
-  auto &order_by = plan_->GetOrderBy();
   auto comparator = [order_bys = plan_->GetOrderBy(), schema = child_executor_->GetOutputSchema()](
                         Tuple &left_tuple, Tuple &right_tuple) -> bool {
     for (const auto &order_pair : order_bys) {

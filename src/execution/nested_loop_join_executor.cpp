@@ -14,6 +14,7 @@
 #include <vector>
 #include "binder/table_ref/bound_join_ref.h"
 #include "common/exception.h"
+#include "type/value_factory.h"
 
 namespace bustub {
 

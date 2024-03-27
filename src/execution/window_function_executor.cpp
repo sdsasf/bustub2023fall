@@ -8,17 +8,27 @@
 #include "storage/table/tuple.h"
 
 namespace bustub {
-
+/*
 auto WindowFunctionExecutor::Equal(Tuple *a, Tuple *b,
                                    const std::vector<std::pair<OrderByType, AbstractExpressionRef>> &order_bys)
     -> bool {
-  for (const auto &[_, expr] : order_bys) {
-    if (expr->Evaluate(a, child_executor_->GetOutputSchema())
-            .CompareEquals(expr->Evaluate(b, child_executor_->GetOutputSchema())) != CmpBool::CmpTrue) {
+  for (auto &order_by_pair : order_bys) {
+    if (order_by_pair.second->Evaluate(a, child_executor_->GetOutputSchema())
+            .CompareEquals(order_by_pair.second->Evaluate(b, child_executor_->GetOutputSchema())) != CmpBool::CmpTrue) {
       return false;
     }
   }
   return true;
+}*/
+
+auto WindowFunctionExecutor::Equal(Tuple *a, Tuple *b,
+                                   const std::vector<std::pair<OrderByType, AbstractExpressionRef>> &order_bys)
+    -> bool {
+  auto pred = [&a, &b, schema = child_executor_->GetOutputSchema()](
+                  const std::pair<OrderByType, AbstractExpressionRef> &pair) -> bool {
+    return static_cast<bool>(pair.second->Evaluate(a, schema).CompareEquals(pair.second->Evaluate(b, schema)));
+  };
+  return std::all_of(order_bys.begin(), order_bys.end(), pred);
 }
 
 WindowFunctionExecutor::WindowFunctionExecutor(ExecutorContext *exec_ctx, const WindowFunctionPlanNode *plan,

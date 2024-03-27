@@ -46,8 +46,8 @@ void TopNExecutor::Init() {
       heap.pop();
     }
   }
-  auto sz = heap.size();
-  for (auto i = 0; i < sz; ++i) {
+  uint32_t sz = heap.size();
+  for (uint32_t i = 0; i < sz; ++i) {
     tuples_.push_back(heap.top());
     heap.pop();
   }

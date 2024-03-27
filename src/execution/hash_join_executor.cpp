@@ -13,6 +13,7 @@
 #include "execution/executors/hash_join_executor.h"
 #include <algorithm>
 #include <vector>
+#include "type/value_factory.h"
 
 namespace bustub {
 
@@ -82,6 +83,7 @@ auto HashJoinExecutor::Next(Tuple *tuple, RID *rid) -> bool {
 auto HashJoinExecutor::GetLeftJoinKey(const Tuple &tuple) -> HashJoinKey {
   std::vector<Value> values;
   const std::vector<AbstractExpressionRef> &left_key_expr = plan_->LeftJoinKeyExpressions();
+  values.reserve(left_key_expr.size());
   for (const auto &expr : left_key_expr) {
     values.push_back(expr->Evaluate(&tuple, left_executor_->GetOutputSchema()));
   }
@@ -91,6 +93,7 @@ auto HashJoinExecutor::GetLeftJoinKey(const Tuple &tuple) -> HashJoinKey {
 auto HashJoinExecutor::GetRightJoinKey(const Tuple &tuple) -> HashJoinKey {
   std::vector<Value> values;
   const std::vector<AbstractExpressionRef> &right_key_expr = plan_->RightJoinKeyExpressions();
+  values.reserve(right_key_expr.size());
   for (const auto &expr : right_key_expr) {
     values.push_back(expr->Evaluate(&tuple, right_executor_->GetOutputSchema()));
   }

@@ -127,9 +127,7 @@ class SimpleAggregationHashTable {
     CombineAggregateValues(&ht_[agg_key], agg_val);
   }
 
-  void InsertDefaultValue() {
-    ht_.insert(std::make_pair<AggregateKey, AggregateValue>({std::vector<Value>()}, GenerateInitialAggregateValue()));
-  }
+  void InsertDefaultValue() { ht_.insert({{std::vector<Value>()}, GenerateInitialAggregateValue()}); }
 
   /**
    * Clear the hash table
