@@ -13,6 +13,7 @@
 #pragma once
 
 #include <memory>
+#include <queue>
 #include <utility>
 #include <vector>
 
@@ -63,5 +64,8 @@ class TopNExecutor : public AbstractExecutor {
   const TopNPlanNode *plan_;
   /** The child executor from which tuples are obtained */
   std::unique_ptr<AbstractExecutor> child_executor_;
+  std::vector<Tuple> tuples_;
+  // must use reverse iter, because ASC must use MaxHeap, implement <
+  std::vector<Tuple>::reverse_iterator tuple_iter_;
 };
 }  // namespace bustub

@@ -21,6 +21,7 @@
 #include "execution/expressions/abstract_expression.h"
 #include "execution/plans/abstract_plan.h"
 #include "fmt/core.h"
+#include "type/value_factory.h"
 
 namespace bustub {
 

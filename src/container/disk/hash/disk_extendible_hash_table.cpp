@@ -100,7 +100,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
   auto header_page = h_w_guard.AsMut<ExtendibleHTableHeaderPage>();
   // if there is no free page in bpm, guard.page_ is nullptr(confuse me for a week !!!!!!!!)
   // As use page_->GetData directly !!!!
-  if (!header_page) {
+  if (header_page == nullptr) {
     // this shouldn't happen !!
     std::cout << "There is no free space in bpm, can't fetch header page!" << std::endl;
     return false;
@@ -112,7 +112,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
     // fetch directory page
     WritePageGuard d_w_guard = bpm_->FetchPageWrite(d_page_id);
     auto d_page = d_w_guard.AsMut<ExtendibleHTableDirectoryPage>();
-    if (!d_page) {
+    if (d_page == nullptr) {
       // this shouldn't happen !!
       std::cout << "There is no free space in bpm, can't fetch directory page!" << std::endl;
       return false;

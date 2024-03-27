@@ -50,5 +50,8 @@ class SeqScanExecutor : public AbstractExecutor {
  private:
   /** The sequential scan plan node to be executed */
   const SeqScanPlanNode *plan_;
+  // TableIterator can't copy
+  std::vector<RID>::iterator table_iter_;
+  std::vector<RID> rids_;
 };
 }  // namespace bustub

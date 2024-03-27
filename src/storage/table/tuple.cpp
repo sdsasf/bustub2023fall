@@ -31,6 +31,7 @@ Tuple::Tuple(std::vector<Value> values, const Schema *schema) {
     if (len == BUSTUB_VALUE_NULL) {
       len = 0;
     }
+    // plus sizeof(uint32_t) because var length have length at begin
     tuple_size += (len + sizeof(uint32_t));
   }
 
