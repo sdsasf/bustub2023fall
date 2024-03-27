@@ -8,7 +8,10 @@ TopNExecutor::TopNExecutor(ExecutorContext *exec_ctx, const TopNPlanNode *plan,
 
 void TopNExecutor::Init() {
   // throw NotImplementedException("TopNExecutor is not implemented");
+  // init must return to init state, so all the state must clear !!
   child_executor_->Init();
+  tuples_.clear();
+
   auto comparator = [order_bys = plan_->GetOrderBy(), schema = child_executor_->GetOutputSchema()](
                         Tuple &left_tuple, Tuple &right_tuple) -> bool {
     for (const auto &order_pair : order_bys) {

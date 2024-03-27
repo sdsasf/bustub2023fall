@@ -57,5 +57,7 @@ select * from t1;
 ----
 
 # Index Scan
+query
 select * from t1 where v1 = 1;
 ----
+
