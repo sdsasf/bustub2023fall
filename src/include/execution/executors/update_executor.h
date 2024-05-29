@@ -12,12 +12,16 @@
 
 #pragma once
 
+#include <list>
 #include <memory>
 #include <utility>
 #include <vector>
 
+#include "concurrency/transaction_manager.h"
+#include "execution/execution_common.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
+#include "execution/expressions/column_value_expression.h"
 #include "execution/plans/update_plan.h"
 #include "storage/table/tuple.h"
 #include "type/value_factory.h"
@@ -67,5 +71,9 @@ class UpdateExecutor : public AbstractExecutor {
   /** The child executor to obtain value from */
   std::unique_ptr<AbstractExecutor> child_executor_;
   bool is_called_;
+
+  TransactionManager *txn_mgr_;
+  Transaction *txn_;
+  std::list<std::pair<RID, Tuple>> buffer_;
 };
 }  // namespace bustub

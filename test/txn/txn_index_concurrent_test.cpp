@@ -123,8 +123,8 @@ TEST(TxnIndexTest, DISABLED_IndexConcurrentUpdateTest) {  // NOLINT
     EnsureIndexScan(*bustub);
     Execute(*bustub, "CREATE TABLE maintable(a int primary key, b int)");
     std::vector<std::thread> update_threads;
-    const int thread_cnt = 8;
-    const int number_cnt = 20;
+    const int thread_cnt = 8;   // 8
+    const int number_cnt = 20;  // 20
     Execute(*bustub, generate_insert_sql(number_cnt), false);
     TableHeapEntryNoMoreThan(*bustub, bustub->catalog_->GetTable("maintable"), number_cnt);
     update_threads.reserve(thread_cnt);
@@ -147,6 +147,7 @@ TEST(TxnIndexTest, DISABLED_IndexConcurrentUpdateTest) {  // NOLINT
             result.push_back(false);
             continue;
           }
+          std::cerr << " thread " << thread << " updated a = " << i << std::endl;
           if (add_delete_insert) {
             StringVectorWriter data_writer;
             BUSTUB_ENSURE(bustub->ExecuteSqlTxn(generate_select_sql(i), data_writer, txn), "cannot retrieve data");
@@ -157,6 +158,7 @@ TEST(TxnIndexTest, DISABLED_IndexConcurrentUpdateTest) {  // NOLINT
                           "cannot insert data");
           }
           BUSTUB_ENSURE(bustub->txn_manager_->Commit(txn), "cannot commit??");
+          std::cerr << "txn " << txn->GetTransactionIdHumanReadable() << " commited" << std::endl;
           result.push_back(true);
           std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
@@ -192,7 +194,7 @@ TEST(TxnIndexTest, DISABLED_IndexConcurrentUpdateTest) {  // NOLINT
   }
 }
 
-TEST(TxnIndexTest, DISABLED_IndexConcurrentUpdateAbortTest) {  // NOLINT
+TEST(TxnIndexTest, IndexConcurrentUpdateAbortTest) {  // NOLINT
   const auto generate_sql = [](int n) -> std::string {
     return fmt::format("UPDATE maintable SET b = b + {} WHERE a = {}", 1, n);
   };

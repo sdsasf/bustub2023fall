@@ -11,6 +11,9 @@
 //===----------------------------------------------------------------------===//
 
 #include <memory>
+#include <optional>
+#include <queue>
+#include <vector>
 
 #include "execution/executors/delete_executor.h"
 
@@ -24,24 +27,34 @@ void DeleteExecutor::Init() {
   // throw NotImplementedException("DeleteExecutor is not implemented");
   child_executor_->Init();
   is_called_ = false;
+
+  txn_mgr_ = exec_ctx_->GetTransactionManager();
+  txn_ = exec_ctx_->GetTransaction();
+  Tuple old_tuple{};
+  RID rid;
+  while (child_executor_->Next(&old_tuple, &rid)) {
+    buffer_.push({rid, old_tuple});
+  }
 }
 
 auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   Tuple delete_tuple{};
+  RID temp_rid;
   int delete_num = 0;
-  ExecutorContext *ctx = GetExecutorContext();
-  Catalog *catalog = ctx->GetCatalog();
+  Catalog *catalog = exec_ctx_->GetCatalog();
   TableInfo *table_info = catalog->GetTable(plan_->GetTableOid());
   std::vector<IndexInfo *> indexes = catalog->GetTableIndexes(table_info->name_);
-  while (child_executor_->Next(&delete_tuple, rid)) {
-    // delete tuple
-    table_info->table_->UpdateTupleMeta(TupleMeta{0, true}, *rid);
-    // update associated index
-    for (auto idx_info : indexes) {
-      idx_info->index_->DeleteEntry(
-          delete_tuple.KeyFromTuple(table_info->schema_, idx_info->key_schema_, idx_info->index_->GetKeyAttrs()), *rid,
-          nullptr);
-    }
+  // origin tuple schema
+  Schema schema = child_executor_->GetOutputSchema();
+  while (!buffer_.empty()) {
+    auto tuple_pair = buffer_.front();
+    delete_tuple = std::move(tuple_pair.second);
+    temp_rid = tuple_pair.first;
+    TupleMeta old_tuple_meta = table_info->table_->GetTupleMeta(temp_rid);
+    buffer_.pop();
+
+    DeleteTuple(table_info, &schema, txn_mgr_, txn_, old_tuple_meta, delete_tuple, temp_rid);
+
     ++delete_num;
   }
   std::vector<Value> values;

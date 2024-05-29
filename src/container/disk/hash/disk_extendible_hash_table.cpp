@@ -102,7 +102,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
   // As use page_->GetData directly !!!!
   if (header_page == nullptr) {
     // this shouldn't happen !!
-    std::cout << "There is no free space in bpm, can't fetch header page!" << std::endl;
+    // std::cout << "There is no free space in bpm, can't fetch header page!" << std::endl;
     return false;
   }
   uint32_t d_idx = header_page->HashToDirectoryIndex(hash);
@@ -114,7 +114,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
     auto d_page = d_w_guard.AsMut<ExtendibleHTableDirectoryPage>();
     if (d_page == nullptr) {
       // this shouldn't happen !!
-      std::cout << "There is no free space in bpm, can't fetch directory page!" << std::endl;
+      // std::cout << "There is no free space in bpm, can't fetch directory page!" << std::endl;
       return false;
     }
     // test
@@ -127,14 +127,14 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
       auto b_page = b_w_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
       if (!b_page) {
         // this shouldn't happen !!
-        std::cout << "There is no free space in bpm, can't fetch bucket page!" << std::endl;
+        // std::cout << "There is no free space in bpm, can't fetch bucket page!" << std::endl;
         return false;
       }
       // std::cout << "after find b_page_id " << b_page_id << std::endl;
       if (!(b_page->Lookup(key, v, cmp_))) {
         if (b_page->Insert(key, value, cmp_)) {
           // b_page->PrintBucket();
-          std::cout << "Insert key " << key << " to page " << b_page_id << std::endl;
+          // std::cout << "Insert key " << key << " to page " << b_page_id << std::endl;
           return true;
         }
         if (b_page->IsFull()) {  // if bucket overflow
@@ -190,13 +190,13 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
                 image_b_page->Insert(entry.first, entry.second, cmp_);
               }
             }
-            std::cout << "------------------------------" << std::endl;
-            std::cout << "After split page " << std::endl;
-            for (uint32_t i = 0; i < d_page->Size(); ++i) {
-              std::cout << i << "   " << d_page->GetBucketPageId(i) << " local depth " << d_page->GetLocalDepth(i)
-                        << std::endl;
-            }
-            std::cout << "------------------------------" << std::endl;
+            // std::cout << "------------------------------" << std::endl;
+            // std::cout << "After split page " << std::endl;
+            // for (uint32_t i = 0; i < d_page->Size(); ++i) {
+            //   std::cout << i << "   " << d_page->GetBucketPageId(i) << " local depth " << d_page->GetLocalDepth(i)
+            //             << std::endl;
+            // }
+            // std::cout << "------------------------------" << std::endl;
             // std::cout << "new local depth " << d_page->GetLocalDepth(b_idx) <<std::endl;
             // drop bucket and image bucket
             image_b_w_page_guard.Drop();
@@ -212,7 +212,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Insert(const K &key, const V &value, Tra
               return false;
             }
             if (b_page->Insert(key, value, cmp_)) {
-              std::cout << "Insert key " << key << " in page " << b_page_id << std::endl;
+              // std::cout << "Insert key " << key << " in page " << b_page_id << std::endl;
               return true;
             }
           }
@@ -273,7 +273,7 @@ auto DiskExtendibleHashTable<K, V, KC>::InsertToNewBucket(ExtendibleHTableDirect
   // new_b_page->PrintBucket();
 
   // std::cout << "Insert new bucket idx = " << bucket_idx << std::endl;
-  std::cout << "Insert key " << key << " to page " << directory->GetBucketPageId(bucket_idx) << std::endl;
+  // std::cout << "Insert key " << key << " to page " << directory->GetBucketPageId(bucket_idx) << std::endl;
   return true;
 }
 
@@ -316,7 +316,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
       auto b_page = b_w_guard.AsMut<ExtendibleHTableBucketPage<K, V, KC>>();
       // std::cout << "Find bucket page " << b_page_id << std::endl;
       if (b_page->Remove(key, cmp_)) {
-        std::cout << "remove key " << key << " in page " << b_page_id << std::endl;
+        // std::cout << "remove key " << key << " in page " << b_page_id << std::endl;
         if (b_page->IsEmpty()) {  // if bucket is empty after remove
           while (true) {
             // only local depth not equal to 0, it has split image !!
@@ -356,6 +356,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
           while (d_page->CanShrink()) {
             d_page->DecrGlobalDepth();
           }
+          /*
           std::cout << "------------------------------" << std::endl;
           std::cout << "After merge page " << std::endl;
           for (uint32_t i = 0; i < d_page->Size(); ++i) {
@@ -363,6 +364,7 @@ auto DiskExtendibleHashTable<K, V, KC>::Remove(const K &key, Transaction *transa
                       << std::endl;
           }
           std::cout << "------------------------------" << std::endl;
+          */
         }
         // b_page->PrintBucket();
         return true;

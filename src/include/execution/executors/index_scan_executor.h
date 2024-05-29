@@ -15,6 +15,8 @@
 #include <vector>
 
 #include "common/rid.h"
+#include "concurrency/transaction_manager.h"
+#include "execution/execution_common.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/index_scan_plan.h"
@@ -46,5 +48,8 @@ class IndexScanExecutor : public AbstractExecutor {
   const IndexScanPlanNode *plan_;
   std::vector<RID> rids_;
   std::vector<RID>::iterator rids_iter_;
+
+  Transaction *txn_;
+  TransactionManager *txn_mgr_;
 };
 }  // namespace bustub

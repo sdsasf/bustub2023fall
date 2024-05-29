@@ -11,6 +11,8 @@
 //===----------------------------------------------------------------------===//
 
 #include <memory>
+#include <optional>
+#include <vector>
 
 #include "execution/executors/insert_executor.h"
 
@@ -23,31 +25,31 @@ InsertExecutor::InsertExecutor(ExecutorContext *exec_ctx, const InsertPlanNode *
 void InsertExecutor::Init() {
   // throw NotImplementedException("InsertExecutor is not implemented");
   child_executor_->Init();
+  txn_mgr_ = exec_ctx_->GetTransactionManager();
+  txn_ = exec_ctx_->GetTransaction();
   is_called_ = false;
 }
 
-auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
+// rid should be unused
+auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   Tuple child_tuple{};
   int sz = 0;
-  ExecutorContext *ctx = GetExecutorContext();
-  Catalog *catalog = ctx->GetCatalog();
+  Catalog *catalog = exec_ctx_->GetCatalog();
   TableInfo *table_info = catalog->GetTable(plan_->GetTableOid());
+  // only have primary key index in P4
   std::vector<IndexInfo *> indexes = catalog->GetTableIndexes(table_info->name_);
+  IndexInfo *primary_key_idx_info = indexes[0];
   while (child_executor_->Next(&child_tuple, rid)) {
-    // insert tuple into table directly, not change schema,
-    // because The planner will ensure that the values have the same schema as the table
-    auto rid_optional = table_info->table_->InsertTuple(TupleMeta{0, false}, child_tuple, ctx->GetLockManager(),
-                                                        nullptr, plan_->GetTableOid());
-    // maybe child executor don't return rid
-    if (rid_optional != std::nullopt) {
-      *rid = rid_optional.value();
-    }
-    // update associated index
-    for (IndexInfo *idx_info : indexes) {
-      // change tuple to index schema and insert it to index
-      idx_info->index_->InsertEntry(
-          child_tuple.KeyFromTuple(table_info->schema_, idx_info->key_schema_, idx_info->index_->GetKeyAttrs()), *rid,
-          nullptr);
+    // if don't have primary key index
+    // every insert allocate a new rid, don't need to LockVersionLink()
+    if (primary_key_idx_info == nullptr) {
+      auto rid_optional = table_info->table_->InsertTuple(TupleMeta{txn_->GetTransactionTempTs(), false}, child_tuple,
+                                                          exec_ctx_->GetLockManager(), txn_, plan_->GetTableOid());
+      txn_mgr_->UpdateUndoLink(*rid_optional, std::nullopt);
+      txn_->AppendWriteSet(table_info->oid_, *rid_optional);
+    } else {
+      InsertTuple(primary_key_idx_info, table_info, txn_mgr_, txn_, exec_ctx_->GetLockManager(), child_tuple,
+                  &child_executor_->GetOutputSchema());
     }
     ++sz;
   }

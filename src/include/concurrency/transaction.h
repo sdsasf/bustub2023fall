@@ -21,6 +21,7 @@
 #include <list>
 #include <memory>
 #include <mutex>  // NOLINT
+#include <sstream>
 #include <string>
 #include <thread>  // NOLINT
 #include <unordered_map>
@@ -101,7 +102,8 @@ class Transaction {
   /** @return the id of this transaction */
   inline auto GetTransactionId() const -> txn_id_t { return txn_id_; }
 
-  /** @return the id of this transaction, stripping the highest bit. NEVER use/store this value unless for debugging. */
+  /** @return the id of this transaction, stripping the highest bit. NEVER use/store this value unless for debugging.
+   */
   inline auto GetTransactionIdHumanReadable() const -> txn_id_t { return txn_id_ ^ TXN_START_ID; }
 
   /** @return the temporary timestamp of this transaction */

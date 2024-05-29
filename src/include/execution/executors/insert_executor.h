@@ -15,6 +15,8 @@
 #include <memory>
 #include <utility>
 
+#include "concurrency/transaction_manager.h"
+#include "execution/execution_common.h"
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/insert_plan.h"
@@ -49,7 +51,7 @@ class InsertExecutor : public AbstractExecutor {
    * NOTE: InsertExecutor::Next() does not use the `rid` out-parameter.
    * NOTE: InsertExecutor::Next() returns true with number of inserted rows produced only once.
    */
-  auto Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool override;
+  auto Next(Tuple *tuple, RID *rid) -> bool override;
 
   /** @return The output schema for the insert */
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); };
@@ -58,6 +60,8 @@ class InsertExecutor : public AbstractExecutor {
   /** The insert plan node to be executed*/
   const InsertPlanNode *plan_;
   std::unique_ptr<AbstractExecutor> child_executor_;
+  TransactionManager *txn_mgr_;
+  Transaction *txn_;
   bool is_called_;
 };
 
