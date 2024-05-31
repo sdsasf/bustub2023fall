@@ -34,7 +34,6 @@ void UpdateExecutor::Init() {
   txn_ = exec_ctx_->GetTransaction();
   Tuple old_tuple{};
   RID rid;
-  TupleMeta temp_meta;
   while (child_executor_->Next(&old_tuple, &rid)) {
     // use buffered old tuple because Visibility is guaranteed by the child executor
     if (rid.GetPageId() != INVALID_PAGE_ID) {
@@ -44,15 +43,15 @@ void UpdateExecutor::Init() {
 }
 
 auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
-  uint32_t i = 0;
-
   Tuple old_tuple{};
   TupleMeta old_tuple_meta;
   RID temp_rid;
   int update_num = 0;
+
   std::vector<IndexInfo *> indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
   IndexInfo *primary_key_idx_info = indexes.front();
   auto key_idx = primary_key_idx_info->index_->GetKeyAttrs().front();
+
   // std::cerr << "key index is  " << key_idx << std::endl;
   const Schema *schema = &child_executor_->GetOutputSchema();
   // if is primary key update
@@ -114,19 +113,23 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         }
       } else {
         LockAndCheck(temp_rid, txn_mgr_, txn_, table_info_);
-
+        std::cerr << "Txn " << txn_->GetTransactionIdHumanReadable() << " pass LockAndCheck " << std::endl;
         std::optional<UndoLink> undo_link_optional = txn_mgr_->GetUndoLink(temp_rid);
         UndoLog temp_undo_log = GenerateDiffLog(old_tuple, old_tuple_meta, new_tuple, new_tuple_meta, schema);
 
         temp_undo_log.prev_version_ = *undo_link_optional;
 
         UndoLink new_undo_link = txn_->AppendUndoLog(temp_undo_log);
-        // txn_mgr_->UpdateVersionLink(temp_rid, VersionUndoLink{std::move(new_undo_link), true}, nullptr);
-        txn_mgr_->UpdateUndoLink(temp_rid, new_undo_link, nullptr);
+        txn_mgr_->UpdateVersionLink(temp_rid, VersionUndoLink{new_undo_link, true}, nullptr);
+        // txn_mgr_->UpdateUndoLink(temp_rid, new_undo_link, nullptr);
       }
 
       // if is self_modification and have no version link(inserted by this txn)
       // only update table heap
+      // std::cerr << "old tuple " << old_tuple.ToString(schema) << "    update new tuple " <<
+      // new_tuple.ToString(schema)
+      //       << std::endl;
+      std::cerr << " new tuple meta " << (new_tuple_meta.ts_ ^ TXN_START_ID) << std::endl;
       table_info_->table_->UpdateTupleInPlace(new_tuple_meta, new_tuple, temp_rid, nullptr);
       txn_->AppendWriteSet(table_info_->oid_, temp_rid);
 

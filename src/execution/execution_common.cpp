@@ -303,13 +303,13 @@ auto LockVersionLink(RID rid, TransactionManager *txn_mgr) -> bool {
           // version_link_optional->prev_ == origin_version_link_optional->prev_ in case TOCTTOU problem
           // at first line we get version link, and copy it later in UpdateVersionLink
           // maybe during this time another txn update this tuple and commit, then the version link prev is invalid
-          return (!origin_version_link_optional->in_progress_ &&
-                  version_link_optional->prev_ == origin_version_link_optional->prev_);
+          return (!(origin_version_link_optional->in_progress_) &&
+                  (origin_version_link_optional->prev_ == version_link_optional->prev_));
         });
   }
   return txn_mgr->UpdateVersionLink(rid, VersionUndoLink{UndoLink(), true},
-                                    [](std::optional<VersionUndoLink> origin_version_link_optional) -> bool {
-                                      return (!origin_version_link_optional.has_value());
+                                    [](std::optional<VersionUndoLink> origin_version_link_optional) {
+                                      return !origin_version_link_optional.has_value();
                                     });
 }
 
@@ -396,7 +396,8 @@ void DeleteTuple(const TableInfo *table_info, const Schema *schema, TransactionM
     temp_undo_log.prev_version_ = undo_link_optional.value();
 
     UndoLink new_undo_link = txn->AppendUndoLog(temp_undo_log);
-    txn_mgr->UpdateUndoLink(rid, new_undo_link, nullptr);
+    txn_mgr->UpdateVersionLink(rid, VersionUndoLink{new_undo_link, true}, nullptr);
+    // txn_mgr->UpdateUndoLink(rid, new_undo_link, nullptr);
   }
 
   // delete tuple in table heap

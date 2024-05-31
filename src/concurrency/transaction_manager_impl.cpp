@@ -63,6 +63,7 @@ auto TransactionManager::UpdateVersionLink(RID rid, std::optional<VersionUndoLin
   }
   if (prev_version.has_value()) {
     pg_ver_info->prev_version_[rid.GetSlotNum()] = *prev_version;
+    // std::cerr << "  new version link, in_progress is " << prev_version->in_progress_ << std::endl;
   } else {
     pg_ver_info->prev_version_.erase(rid.GetSlotNum());
   }

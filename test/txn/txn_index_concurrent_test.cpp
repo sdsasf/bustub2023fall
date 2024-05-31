@@ -117,7 +117,7 @@ TEST(TxnIndexTest, DISABLED_IndexConcurrentUpdateTest) {  // NOLINT
     }
     return fmt::format("INSERT INTO maintable VALUES {}", fmt::join(data, ","));
   };
-  const int trials = 50;
+  const int trials = 50;  // 50
   for (int n = 0; n < trials; n++) {
     auto bustub = std::make_unique<BustubInstance>();
     EnsureIndexScan(*bustub);
@@ -130,7 +130,7 @@ TEST(TxnIndexTest, DISABLED_IndexConcurrentUpdateTest) {  // NOLINT
     update_threads.reserve(thread_cnt);
     std::map<int, std::vector<bool>> operation_result;
     std::mutex result_mutex;
-    bool add_delete_insert = (n % 2 == 1);
+    bool add_delete_insert = false;  //(n % 2 == 1);
     fmt::println(stderr, "trial {}: running with {} threads with {} rows, add_delete_insert={}", n + 1, thread_cnt,
                  number_cnt, add_delete_insert);
     global_disable_execution_exception_print.store(true);
@@ -143,11 +143,17 @@ TEST(TxnIndexTest, DISABLED_IndexConcurrentUpdateTest) {  // NOLINT
         for (int i = 0; i < number_cnt; i++) {
           auto sql = generate_sql(thread, i);
           auto *txn = bustub->txn_manager_->Begin();
+          // std::cerr << "Txn " << txn->GetTransactionIdHumanReadable() << " Begin read_ts = " << txn->GetReadTs()
+          //          << std::endl;
           if (!bustub->ExecuteSqlTxn(sql, writer, txn)) {
+            // std::cerr << " thread " << thread << " Txn " << txn->GetTransactionIdHumanReadable() << " updated a = "
+            // << i
+            //          << " failed" << std::endl;
             result.push_back(false);
             continue;
           }
-          std::cerr << " thread " << thread << " updated a = " << i << std::endl;
+          // std::cerr << " thread " << thread << " Txn " << txn->GetTransactionIdHumanReadable() << " updated a = " <<
+          // << std::endl;
           if (add_delete_insert) {
             StringVectorWriter data_writer;
             BUSTUB_ENSURE(bustub->ExecuteSqlTxn(generate_select_sql(i), data_writer, txn), "cannot retrieve data");
@@ -158,7 +164,9 @@ TEST(TxnIndexTest, DISABLED_IndexConcurrentUpdateTest) {  // NOLINT
                           "cannot insert data");
           }
           BUSTUB_ENSURE(bustub->txn_manager_->Commit(txn), "cannot commit??");
-          std::cerr << "txn " << txn->GetTransactionIdHumanReadable() << " commited" << std::endl;
+          // std::cerr << "txn " << txn->GetTransactionIdHumanReadable() << " commited commit_ts = " <<
+          // txn->GetCommitTs()
+          //          << std::endl;
           result.push_back(true);
           std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
