@@ -82,7 +82,7 @@ auto TransactionManager::Commit(Transaction *txn) -> bool {
       TupleMeta old_meta = temp_table_info->table_->GetTupleMeta(j);
       temp_table_info->table_->UpdateTupleMeta({temp_commit_ts, old_meta.is_deleted_}, j);
       UnsetInProgress(j, this);
-      std::cerr << "txn " << txn->GetTransactionIdHumanReadable() << " set in_progress_ = 0" << std::endl;
+      // std::cerr << "txn " << txn->GetTransactionIdHumanReadable() << " set in_progress_ = 0" << std::endl;
     }
   }
 

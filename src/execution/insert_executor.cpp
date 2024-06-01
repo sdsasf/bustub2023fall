@@ -38,14 +38,14 @@ auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   TableInfo *table_info = catalog->GetTable(plan_->GetTableOid());
   // only have primary key index in P4
   std::vector<IndexInfo *> indexes = catalog->GetTableIndexes(table_info->name_);
-  IndexInfo *primary_key_idx_info = indexes[0];
+  IndexInfo *primary_key_idx_info = indexes.empty() ? nullptr : indexes[0];
   while (child_executor_->Next(&child_tuple, rid)) {
     // if don't have primary key index
     // every insert allocate a new rid, don't need to LockVersionLink()
     if (primary_key_idx_info == nullptr) {
       auto rid_optional = table_info->table_->InsertTuple(TupleMeta{txn_->GetTransactionTempTs(), false}, child_tuple,
                                                           exec_ctx_->GetLockManager(), txn_, plan_->GetTableOid());
-      txn_mgr_->UpdateUndoLink(*rid_optional, std::nullopt);
+      txn_mgr_->UpdateUndoLink(*rid_optional, UndoLink());
       txn_->AppendWriteSet(table_info->oid_, *rid_optional);
     } else {
       InsertTuple(primary_key_idx_info, table_info, txn_mgr_, txn_, exec_ctx_->GetLockManager(), child_tuple,

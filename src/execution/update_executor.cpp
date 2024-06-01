@@ -49,14 +49,17 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   int update_num = 0;
 
   std::vector<IndexInfo *> indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
-  IndexInfo *primary_key_idx_info = indexes.front();
-  auto key_idx = primary_key_idx_info->index_->GetKeyAttrs().front();
+  IndexInfo *primary_key_idx_info = indexes.empty() ? nullptr : indexes[0];
 
   // std::cerr << "key index is  " << key_idx << std::endl;
   const Schema *schema = &child_executor_->GetOutputSchema();
+  uint32_t key_idx = 0;
+  if (primary_key_idx_info != nullptr) {
+    key_idx = primary_key_idx_info->index_->GetKeyAttrs().front();
+  }
   // if is primary key update
-  if (const auto *cons_expr = dynamic_cast<const ColumnValueExpression *>(plan_->target_expressions_[key_idx].get());
-      cons_expr == nullptr) {
+  const auto *cons_expr = dynamic_cast<const ColumnValueExpression *>(plan_->target_expressions_[key_idx].get());
+  if (primary_key_idx_info != nullptr && cons_expr == nullptr) {
     // delete all buffered tuple first
     for (const auto &tuple_pair : buffer_) {
       temp_rid = tuple_pair.first;
@@ -113,7 +116,7 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         }
       } else {
         LockAndCheck(temp_rid, txn_mgr_, txn_, table_info_);
-        std::cerr << "Txn " << txn_->GetTransactionIdHumanReadable() << " pass LockAndCheck " << std::endl;
+        // std::cerr << "Txn " << txn_->GetTransactionIdHumanReadable() << " pass LockAndCheck " << std::endl;
         std::optional<UndoLink> undo_link_optional = txn_mgr_->GetUndoLink(temp_rid);
         UndoLog temp_undo_log = GenerateDiffLog(old_tuple, old_tuple_meta, new_tuple, new_tuple_meta, schema);
 
@@ -121,15 +124,10 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
         UndoLink new_undo_link = txn_->AppendUndoLog(temp_undo_log);
         txn_mgr_->UpdateVersionLink(temp_rid, VersionUndoLink{new_undo_link, true}, nullptr);
-        // txn_mgr_->UpdateUndoLink(temp_rid, new_undo_link, nullptr);
       }
 
       // if is self_modification and have no version link(inserted by this txn)
       // only update table heap
-      // std::cerr << "old tuple " << old_tuple.ToString(schema) << "    update new tuple " <<
-      // new_tuple.ToString(schema)
-      //       << std::endl;
-      std::cerr << " new tuple meta " << (new_tuple_meta.ts_ ^ TXN_START_ID) << std::endl;
       table_info_->table_->UpdateTupleInPlace(new_tuple_meta, new_tuple, temp_rid, nullptr);
       txn_->AppendWriteSet(table_info_->oid_, temp_rid);
 

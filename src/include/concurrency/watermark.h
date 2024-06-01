@@ -2,6 +2,7 @@
 
 #include <iterator>
 #include <list>
+#include <map>
 #include <unordered_map>
 
 #include "concurrency/transaction.h"
@@ -38,12 +39,13 @@ class Watermark {
   timestamp_t watermark_;
 
   // insert all running read ts in unordered_map
-  std::unordered_map<timestamp_t, int> current_reads_;
+  // std::unordered_map<timestamp_t, int> current_reads_;
+  std::map<timestamp_t, int> current_reads_;
   // std::unordered_map<timestamp_t, std::iterator<list>> current_reads_;
 
   // The inserted read ts must be incremental
   // ts incremental list
-  std::list<timestamp_t> current_reads_list_;
+  // std::list<timestamp_t> current_reads_list_;
 };
 
 };  // namespace bustub
