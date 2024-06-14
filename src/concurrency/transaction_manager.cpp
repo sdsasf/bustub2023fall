@@ -163,6 +163,7 @@ auto TransactionManager::Commit(Transaction *txn) -> bool {
 }
 
 void TransactionManager::Abort(Transaction *txn) {
+  std::cerr << "txn " << txn->GetTransactionIdHumanReadable() << " abort" << std::endl;
   if (txn->state_ != TransactionState::RUNNING && txn->state_ != TransactionState::TAINTED) {
     throw Exception("txn not in running / tainted state");
   }
@@ -174,14 +175,19 @@ void TransactionManager::Abort(Transaction *txn) {
     for (auto &j : i.second) {
       auto undo_link_optional = GetUndoLink(j);
       if (undo_link_optional->IsValid()) {
-        std::vector<UndoLog> undo_logs;
-        undo_logs.push_back(*GetUndoLogOptional(*undo_link_optional));
+        // std::vector<UndoLog> undo_logs;
+        // undo_logs.push_back(*GetUndoLogOptional(*undo_link_optional));
+        auto undo_log = *GetUndoLogOptional(*undo_link_optional);
         auto tuple_pair = temp_table_info->table_->GetTuple(j);
-        auto origin_tuple = ReconstructTuple(&temp_table_info->schema_, tuple_pair.second, tuple_pair.first, undo_logs);
-        // std::unique_lock<std::mutex> commit_lck(commit_mutex_);
-        temp_table_info->table_->UpdateTupleInPlace(TupleMeta{undo_logs.front().ts_, undo_logs.front().is_deleted_},
-                                                    *origin_tuple, j);
-        // temp_table_info->table_->UpdateTupleMeta(TupleMeta{undo_logs.front().ts_, undo_logs.front().is_deleted_}, j);
+        auto origin_tuple = ReplayUndoLog(&temp_table_info->schema_, tuple_pair.second, undo_log);
+        // auto origin_tuple = ReconstructTuple(&temp_table_info->schema_, tuple_pair.second, tuple_pair.first,
+        // undo_logs);
+        std::unique_lock<std::mutex> commit_lck(commit_mutex_);
+        if (origin_tuple.has_value()) {
+          temp_table_info->table_->UpdateTupleInPlace(TupleMeta{undo_log.ts_, undo_log.is_deleted_}, *origin_tuple, j);
+        } else {
+          temp_table_info->table_->UpdateTupleMeta(TupleMeta{undo_log.ts_, true}, j);
+        }
       } else {
         std::unique_lock<std::mutex> commit_lck(commit_mutex_);
         temp_table_info->table_->UpdateTupleMeta(TupleMeta{0, true}, j);

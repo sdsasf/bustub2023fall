@@ -517,7 +517,8 @@ void InsertTuple(const IndexInfo *primary_key_idx_info, const TableInfo *table_i
     // else is self modification(is deleted by this txn before), update in place directly
     if (target_meta.ts_ != txn->GetTransactionTempTs()) {
       LockAndCheck(target_rid, txn_mgr, txn, table_info);
-      UndoLog temp_undo_log = GenerateDiffLog(target_tuple, target_meta, Tuple{}, new_tuple_meta, output_schema);
+      UndoLog temp_undo_log = GenerateDiffLog(target_tuple, target_meta, Tuple{},
+                                              TupleMeta{txn->GetTransactionTempTs(), true}, output_schema);
       auto version_link_optional = txn_mgr->GetVersionLink(target_rid);
       temp_undo_log.prev_version_ = version_link_optional->prev_;
 
