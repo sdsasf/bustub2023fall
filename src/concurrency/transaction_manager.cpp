@@ -52,7 +52,67 @@ auto TransactionManager::Begin(IsolationLevel isolation_level) -> Transaction * 
   return txn_ref;
 }
 
-auto TransactionManager::VerifyTxn(Transaction *txn) -> bool { return true; }
+auto TransactionManager::VerifyTxn(Transaction *txn) -> bool {
+  // don't check read-only txn
+  if (txn->GetWriteSets().empty()) {
+    return true;
+  }
+  std::unordered_map<table_oid_t, std::unordered_set<RID>> rids;
+  const timestamp_t read_ts = txn->GetReadTs();
+  // go through txn_map_ to find conflict txn and collect write set
+  std::shared_lock<std::shared_mutex> lck(txn_map_mutex_);
+  for (auto i = txn_map_.begin(); i != txn_map_.end(); ++i) {
+    std::shared_ptr<Transaction> temp_txn = i->second;
+    if ((temp_txn->GetReadTs() > read_ts) && (temp_txn->GetTransactionState() == TransactionState::COMMITTED)) {
+      const auto &temp_write_set = temp_txn->GetWriteSets();
+      for (auto j = temp_write_set.cbegin(); j != temp_write_set.cend(); ++j) {
+        for (auto k = j->second.cbegin(); k != j->second.cend(); ++k) {
+          rids[j->first].insert(*k);
+        }
+      }
+    }
+  }
+  lck.unlock();
+
+  for (auto i = rids.begin(); i != rids.end(); ++i) {
+    TableInfo *table_info = catalog_->GetTable(i->first);
+    for (auto rid_iter = i->second.begin(); rid_iter != i->second.end(); ++rid_iter) {
+      auto tuple_pair = table_info->table_->GetTuple(*rid_iter);
+      UndoLink undo_link = *GetUndoLink(*rid_iter);
+      if (tuple_pair.first.ts_ < TXN_START_ID) {
+        // need check tuple in table heap
+        if (!tuple_pair.first.is_deleted_) {
+          // if is not insert and delete by the same txn
+          if (!CheckOverlap(txn->scan_predicates_[table_info->oid_], &tuple_pair.second, table_info->schema_)) {
+            Abort(txn);
+            return false;
+          }
+        }
+      }
+
+      // check each version one by one
+      std::optional<Tuple> res_tuple = tuple_pair.second;
+      while (undo_link.IsValid()) {
+        auto undo_log = GetUndoLog(undo_link);
+        if (undo_log.ts_ < txn->GetReadTs()) {
+          break;
+        }
+        if (undo_log.is_deleted_) {
+          undo_link = undo_log.prev_version_;
+          continue;
+        }
+        res_tuple = ReplayUndoLog(&table_info->schema_, *res_tuple, undo_log);
+        if (!CheckOverlap(txn->scan_predicates_[table_info->oid_], &tuple_pair.second, table_info->schema_)) {
+          Abort(txn);
+          return false;
+        }
+
+        undo_link = undo_log.prev_version_;
+      }
+    }
+  }
+  return true;
+}
 
 auto TransactionManager::Commit(Transaction *txn) -> bool {
   std::unique_lock<std::mutex> commit_lck(commit_mutex_);
@@ -108,6 +168,28 @@ void TransactionManager::Abort(Transaction *txn) {
   }
 
   // TODO(fall2023): Implement the abort logic!
+  const std::unordered_map<table_oid_t, std::unordered_set<RID>> &txn_write_set = txn->GetWriteSets();
+  for (const auto &i : txn_write_set) {
+    TableInfo *temp_table_info = catalog_->GetTable(i.first);
+    for (auto &j : i.second) {
+      auto undo_link_optional = GetUndoLink(j);
+      if (undo_link_optional->IsValid()) {
+        std::vector<UndoLog> undo_logs;
+        undo_logs.push_back(*GetUndoLogOptional(*undo_link_optional));
+        auto tuple_pair = temp_table_info->table_->GetTuple(j);
+        auto origin_tuple = ReconstructTuple(&temp_table_info->schema_, tuple_pair.second, tuple_pair.first, undo_logs);
+        // std::unique_lock<std::mutex> commit_lck(commit_mutex_);
+        temp_table_info->table_->UpdateTupleInPlace(TupleMeta{undo_logs.front().ts_, undo_logs.front().is_deleted_},
+                                                    *origin_tuple, j);
+        // temp_table_info->table_->UpdateTupleMeta(TupleMeta{undo_logs.front().ts_, undo_logs.front().is_deleted_}, j);
+      } else {
+        std::unique_lock<std::mutex> commit_lck(commit_mutex_);
+        temp_table_info->table_->UpdateTupleMeta(TupleMeta{0, true}, j);
+      }
+      UnsetInProgress(j, this);
+      // std::cerr << "txn " << txn->GetTransactionIdHumanReadable() << " set in_progress_ = 0" << std::endl;
+    }
+  }
 
   std::unique_lock<std::shared_mutex> lck(txn_map_mutex_);
   txn->state_ = TransactionState::ABORTED;

@@ -11,6 +11,8 @@
 
 namespace bustub {
 
+auto ReplayUndoLog(const Schema *schema, const Tuple &base_tuple, const UndoLog &undo_log) -> std::optional<Tuple>;
+
 auto ReconstructTuple(const Schema *schema, const Tuple &base_tuple, const TupleMeta &base_meta,
                       const std::vector<UndoLog> &undo_logs) -> std::optional<Tuple>;
 
@@ -51,6 +53,8 @@ void DeleteTuple(const TableInfo *table_info, const Schema *schema, TransactionM
 void InsertTuple(const IndexInfo *primary_key_idx_info, const TableInfo *table_info, TransactionManager *txn_mgr,
                  Transaction *txn, LockManager *lock_mgr, Tuple &child_tuple, const Schema *output_schema);
 
+auto CheckOverlap(const std::vector<AbstractExpressionRef> &predicate, const Tuple *tuple, const Schema &schema)
+    -> bool;
 // Add new functions as needed... You are likely need to define some more functions.
 //
 // To give you a sense of what can be shared across executors / transaction manager, here are the

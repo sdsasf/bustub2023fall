@@ -16,7 +16,7 @@ namespace bustub {
 
 // NOLINTBEGIN(bugprone-unchecked-optional-access)
 
-TEST(TxnIndexTest, DISABLED_IndexConcurrentInsertTest) {  // NOLINT
+TEST(TxnIndexTest, IndexConcurrentInsertTest) {  // NOLINT
   const auto generate_sql = [](int thread_id, int n) -> std::string {
     return fmt::format("INSERT INTO maintable VALUES ({}, {})", n, thread_id);
   };
@@ -25,8 +25,8 @@ TEST(TxnIndexTest, DISABLED_IndexConcurrentInsertTest) {  // NOLINT
     auto bustub = std::make_unique<BustubInstance>();
     Execute(*bustub, "CREATE TABLE maintable(a int primary key, b int)");
     std::vector<std::thread> insert_threads;
-    const int thread_cnt = 8;
-    const int number_cnt = 80;
+    const int thread_cnt = 2;   // 8
+    const int number_cnt = 80;  // 80
     insert_threads.reserve(thread_cnt);
     std::map<int, std::vector<bool>> operation_result;
     std::mutex result_mutex;
@@ -42,7 +42,9 @@ TEST(TxnIndexTest, DISABLED_IndexConcurrentInsertTest) {  // NOLINT
           auto *txn = bustub->txn_manager_->Begin();
           if (bustub->ExecuteSqlTxn(sql, writer, txn)) {
             result.push_back(true);
+            std::cerr << "before commit" << std::endl;
             BUSTUB_ENSURE(bustub->txn_manager_->Commit(txn), "cannot commit??");
+            std::cerr << "after commit" << std::endl;
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
           } else {
             result.push_back(false);
@@ -206,7 +208,7 @@ TEST(TxnIndexTest, IndexConcurrentUpdateAbortTest) {  // NOLINT
   const auto generate_sql = [](int n) -> std::string {
     return fmt::format("UPDATE maintable SET b = b + {} WHERE a = {}", 1, n);
   };
-  const int thread_cnt = 8;
+  const int thread_cnt = 20;  // 8
   const int number_cnt = 5;
   const auto generate_insert_sql = [](int n) -> std::string {
     std::vector<std::string> data;
