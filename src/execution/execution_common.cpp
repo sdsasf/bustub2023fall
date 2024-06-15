@@ -437,16 +437,16 @@ void LockAndCheck(RID rid, TransactionManager *txn_mgr, Transaction *txn, const 
   // if not self-modification and can't lock
   // is modifying by other txn
   if (!LockVersionLink(rid, txn_mgr)) {
-    txn_mgr->Abort(txn);
-    /*
-    txn->SetTainted();
-    throw ExecutionException("have conflict in updating version link");
-    */
+    // txn_mgr->Abort(txn);
+    MyAbort(txn);
+    // throw ExecutionException("Abort");
   }
   // IsWWconflict in case tuple and meta hasn't been modified
   // don't have lock until now
   if (IsWriteWriteConflict(txn, table_info->table_->GetTupleMeta(rid))) {
-    txn_mgr->Abort(txn);
+    // txn_mgr->Abort(txn);
+    MyAbort(txn);
+    // throw ExecutionException("Abort");
     // if has been locked, must unset in_progress before abort
     /*
     auto version_link_optional = txn_mgr->GetVersionLink(rid);
@@ -455,6 +455,11 @@ void LockAndCheck(RID rid, TransactionManager *txn_mgr, Transaction *txn, const 
     throw ExecutionException("have conflict in updating version link");
     */
   }
+}
+
+void MyAbort(Transaction *txn) {
+  txn->SetTainted();
+  throw ExecutionException("abort");
 }
 
 void DeleteTuple(const TableInfo *table_info, const Schema *schema, TransactionManager *txn_mgr, Transaction *txn,
@@ -506,29 +511,31 @@ void InsertTuple(const IndexInfo *primary_key_idx_info, const TableInfo *table_i
     RID target_rid = res.front();
     const auto &[target_meta, target_tuple] = table_info->table_->GetTuple(target_rid);
     if (!target_meta.is_deleted_) {
-      txn_mgr->Abort(txn);
-      /*
-      txn->SetTainted();
-      throw ExecutionException("primary key already existed");
-      */
-    }
-    // if is deleted by other txn and has commited
-    // construct new delete undoLog
-    // else is self modification(is deleted by this txn before), update in place directly
-    if (target_meta.ts_ != txn->GetTransactionTempTs()) {
-      LockAndCheck(target_rid, txn_mgr, txn, table_info);
-      UndoLog temp_undo_log = GenerateDiffLog(target_tuple, target_meta, Tuple{},
-                                              TupleMeta{txn->GetTransactionTempTs(), true}, output_schema);
-      auto version_link_optional = txn_mgr->GetVersionLink(target_rid);
-      temp_undo_log.prev_version_ = version_link_optional->prev_;
+      // std::cerr << "a txn enter this condition" << std::endl;
+      // txn_mgr->Abort(txn);
+      MyAbort(txn);
+      // throw ExecutionException("Abort");
+    } else {
+      // if is deleted by other txn and has commited
+      // construct new delete undoLog
+      // else is self modification(is deleted by this txn before), update in place directly
+      if (target_meta.ts_ != txn->GetTransactionTempTs()) {
+        // std::cerr << "a txn enter this condition before LockAndCheck()" << std::endl;
+        LockAndCheck(target_rid, txn_mgr, txn, table_info);
+        // std::cerr << "a txn enter this condition before GenerateDiffLog()" << std::endl;
+        UndoLog temp_undo_log = GenerateDiffLog(target_tuple, target_meta, Tuple{}, new_tuple_meta, output_schema);
+        auto version_link_optional = txn_mgr->GetVersionLink(target_rid);
+        temp_undo_log.prev_version_ = version_link_optional->prev_;
 
-      UndoLink new_undo_link = txn->AppendUndoLog(temp_undo_log);
-      txn_mgr->UpdateVersionLink(target_rid, VersionUndoLink{new_undo_link, true});
-      // Add tuple rid to txn's write set
-      txn->AppendWriteSet(table_info->oid_, target_rid);
+        UndoLink new_undo_link = txn->AppendUndoLog(temp_undo_log);
+        txn_mgr->UpdateVersionLink(target_rid, VersionUndoLink{new_undo_link, true});
+        // Add tuple rid to txn's write set
+        txn->AppendWriteSet(table_info->oid_, target_rid);
+      }
+      table_info->table_->UpdateTupleInPlace(new_tuple_meta, child_tuple, target_rid);
     }
-    table_info->table_->UpdateTupleInPlace(new_tuple_meta, child_tuple, target_rid);
   } else {
+    // std::cerr << "a txn enter this condition primary key don't exist" << std::endl;
     // insert tuple into table heap directly, not change schema,
     // because The planner will ensure that the values have the same schema as the table
     // insert into table heap is thread safe
@@ -541,17 +548,21 @@ void InsertTuple(const IndexInfo *primary_key_idx_info, const TableInfo *table_i
         *rid_optional, txn);
     // if primary key already existed in primary index
     if (!is_inserted) {
-      txn_mgr->Abort(txn);
-      /*
-        txn->SetTainted();
-        throw ExecutionException("primary key already existed");
-        */
+      LockVersionLink(*rid_optional, txn_mgr);
+      txn->AppendWriteSet(table_info->oid_, *rid_optional);
+      // txn_mgr->Abort(txn);
+      MyAbort(txn);
+      // throw ExecutionException("Abort");
+    } else {
+      // std::cerr << "befor update undolink" << std::endl;
+      // update txn_mgr_ version info map
+      txn_mgr->UpdateUndoLink(*rid_optional, std::nullopt);
+      // std::cerr << "after update undolink" << std::endl;
+      LockVersionLink(*rid_optional, txn_mgr);
+      // std::cerr << "after lock undolink" << std::endl;
+      // Add tuple rid to txn's write set
+      txn->AppendWriteSet(table_info->oid_, *rid_optional);
     }
-    // update txn_mgr_ version info map
-    txn_mgr->UpdateUndoLink(*rid_optional, std::nullopt);
-    LockVersionLink(*rid_optional, txn_mgr);
-    // Add tuple rid to txn's write set
-    txn->AppendWriteSet(table_info->oid_, *rid_optional);
   }
 }
 

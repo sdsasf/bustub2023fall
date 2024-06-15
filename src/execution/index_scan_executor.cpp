@@ -35,6 +35,9 @@ void IndexScanExecutor::Init() {
   }
 
   rids_iter_ = rids_.begin();
+
+  // add predicate to txn every time when executor was called
+  exec_ctx_->GetTransaction()->AppendScanPredicate(plan_->table_oid_, plan_->filter_predicate_);
 }
 
 auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {

@@ -3,6 +3,7 @@
 #include <iterator>
 #include <list>
 #include <map>
+#include <shared_mutex>
 #include <unordered_map>
 
 #include "concurrency/transaction.h"
@@ -27,6 +28,7 @@ class Watermark {
   auto UpdateCommitTs(timestamp_t commit_ts) { commit_ts_ = commit_ts; }
 
   auto GetWatermark() -> timestamp_t {
+    std::shared_lock<std::shared_mutex> lck(latch_);
     if (current_reads_.empty()) {
       // std::cout << "current_reads_ is empty " << watermark_ << "  " << commit_ts_ << std::endl;
       return commit_ts_;
@@ -38,6 +40,7 @@ class Watermark {
 
   timestamp_t watermark_;
 
+  std::shared_mutex latch_;
   // insert all running read ts in unordered_map
   // std::unordered_map<timestamp_t, int> current_reads_;
   std::map<timestamp_t, int> current_reads_;

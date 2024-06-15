@@ -25,8 +25,8 @@ TEST(TxnIndexTest, DISABLED_IndexConcurrentInsertTest) {  // NOLINT
     auto bustub = std::make_unique<BustubInstance>();
     Execute(*bustub, "CREATE TABLE maintable(a int primary key, b int)");
     std::vector<std::thread> insert_threads;
-    const int thread_cnt = 2;  // 8
-    const int number_cnt = 1;  // 80
+    const int thread_cnt = 8;   // 8
+    const int number_cnt = 80;  // 80
     insert_threads.reserve(thread_cnt);
     std::map<int, std::vector<bool>> operation_result;
     std::mutex result_mutex;
@@ -40,7 +40,6 @@ TEST(TxnIndexTest, DISABLED_IndexConcurrentInsertTest) {  // NOLINT
         for (int i = 0; i < number_cnt; i++) {
           auto sql = generate_sql(thread, i);
           auto *txn = bustub->txn_manager_->Begin();
-          std::cerr << "txn " << txn->GetTransactionIdHumanReadable() << " begin" << std::endl;
           if (bustub->ExecuteSqlTxn(sql, writer, txn)) {
             result.push_back(true);
             BUSTUB_ENSURE(bustub->txn_manager_->Commit(txn), "cannot commit??");
@@ -124,7 +123,7 @@ TEST(TxnIndexTest, DISABLED_IndexConcurrentUpdateTest) {  // NOLINT
     EnsureIndexScan(*bustub);
     Execute(*bustub, "CREATE TABLE maintable(a int primary key, b int)");
     std::vector<std::thread> update_threads;
-    const int thread_cnt = 1;   // 8
+    const int thread_cnt = 8;   // 8
     const int number_cnt = 20;  // 20
     Execute(*bustub, generate_insert_sql(number_cnt), false);
     TableHeapEntryNoMoreThan(*bustub, bustub->catalog_->GetTable("maintable"), number_cnt);
@@ -207,8 +206,8 @@ TEST(TxnIndexTest, IndexConcurrentUpdateAbortTest) {  // NOLINT
   const auto generate_sql = [](int n) -> std::string {
     return fmt::format("UPDATE maintable SET b = b + {} WHERE a = {}", 1, n);
   };
-  const int thread_cnt = 2;  // 8
-  const int number_cnt = 2;  // 20
+  const int thread_cnt = 20;  // 8
+  const int number_cnt = 20;  // 20
   const auto generate_insert_sql = [](int n) -> std::string {
     std::vector<std::string> data;
     data.reserve(n);
@@ -218,7 +217,7 @@ TEST(TxnIndexTest, IndexConcurrentUpdateAbortTest) {  // NOLINT
     return fmt::format("INSERT INTO maintable VALUES {}", fmt::join(data, ","));
   };
   const int trials = 10;
-  const int operation_cnt = 100;
+  const int operation_cnt = 100;  // 100
   for (int n = 0; n < trials; n++) {
     auto bustub = std::make_unique<BustubInstance>();
     EnsureIndexScan(*bustub);
@@ -279,7 +278,7 @@ TEST(TxnIndexTest, IndexConcurrentUpdateAbortTest) {  // NOLINT
         total += operation_result[j][i];
       }
       expected_rows.push_back({i, total});
-      if (total < 10) {
+      if (total < 10) {  // 10
         fmt::println(stderr, "abort rate too high, {} txn succeeded", total);
         std::terminate();
       }
