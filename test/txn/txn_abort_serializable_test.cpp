@@ -23,6 +23,7 @@ TEST(TxnBonusTest, SerializableTest) {  // NOLINT
     auto txn3 = BeginTxnSerializable(*bustub, "txn3");
     auto txn_read = BeginTxnSerializable(*bustub, "txn_read");
     WithTxn(txn2, ExecuteTxn(*bustub, _var, _txn, "UPDATE maintable SET a = 0 WHERE a = 1"));
+    TxnMgrDbg("after one updates", bustub->txn_manager_.get(), table_info, table_info->table_.get());
     WithTxn(txn3, ExecuteTxn(*bustub, _var, _txn, "UPDATE maintable SET a = 1 WHERE a = 0"));
     TxnMgrDbg("after two updates", bustub->txn_manager_.get(), table_info, table_info->table_.get());
     WithTxn(txn_read, ExecuteTxn(*bustub, _var, _txn, "SELECT * FROM maintable WHERE a = 0"));

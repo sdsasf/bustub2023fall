@@ -116,7 +116,6 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
         }
       } else {
         LockAndCheck(temp_rid, txn_mgr_, txn_, table_info_);
-        // std::cerr << "Txn " << txn_->GetTransactionIdHumanReadable() << " pass LockAndCheck " << std::endl;
         std::optional<UndoLink> undo_link_optional = txn_mgr_->GetUndoLink(temp_rid);
         UndoLog temp_undo_log = GenerateDiffLog(old_tuple, old_tuple_meta, new_tuple, new_tuple_meta, schema);
 
@@ -129,6 +128,7 @@ auto UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
       // if is self_modification and have no version link(inserted by this txn)
       // only update table heap
       table_info_->table_->UpdateTupleInPlace(new_tuple_meta, new_tuple, temp_rid, nullptr);
+      // std::cerr << "tuple rid  " << temp_rid << " append to write set " << std::endl;
       txn_->AppendWriteSet(table_info_->oid_, temp_rid);
 
       ++update_num;

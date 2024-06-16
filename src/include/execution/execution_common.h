@@ -55,6 +55,8 @@ void DeleteTuple(const TableInfo *table_info, const Schema *schema, TransactionM
 void InsertTuple(const IndexInfo *primary_key_idx_info, const TableInfo *table_info, TransactionManager *txn_mgr,
                  Transaction *txn, LockManager *lock_mgr, Tuple &child_tuple, const Schema *output_schema);
 
+// check is write set is overlap with read set
+// true is overlap, should abort in serializable check
 auto CheckOverlap(const std::vector<AbstractExpressionRef> &predicate, const Tuple *tuple, const Schema &schema)
     -> bool;
 // Add new functions as needed... You are likely need to define some more functions.

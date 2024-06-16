@@ -53,8 +53,12 @@ auto TransactionManager::Begin(IsolationLevel isolation_level) -> Transaction * 
 }
 
 auto TransactionManager::VerifyTxn(Transaction *txn) -> bool {
+  if (txn->GetTransactionState() == TransactionState::TAINTED) {
+    return false;
+  }
   // don't check read-only txn
   if (txn->GetWriteSets().empty()) {
+    // std::cerr << " Txn " << txn->GetTransactionIdHumanReadable() << " write set is empty " << std::endl;
     return true;
   }
   std::unordered_map<table_oid_t, std::unordered_set<RID>> rids;
@@ -63,10 +67,12 @@ auto TransactionManager::VerifyTxn(Transaction *txn) -> bool {
   std::shared_lock<std::shared_mutex> lck(txn_map_mutex_);
   for (auto i = txn_map_.begin(); i != txn_map_.end(); ++i) {
     std::shared_ptr<Transaction> temp_txn = i->second;
-    if ((temp_txn->GetReadTs() > read_ts) && (temp_txn->GetTransactionState() == TransactionState::COMMITTED)) {
+    if ((temp_txn->GetTransactionState() == TransactionState::COMMITTED) && (temp_txn->GetCommitTs() > read_ts)) {
+      // std::cerr << "txn " << temp_txn->GetTransactionIdHumanReadable() << " is checked " << std::endl;
       const auto &temp_write_set = temp_txn->GetWriteSets();
       for (auto j = temp_write_set.cbegin(); j != temp_write_set.cend(); ++j) {
         for (auto k = j->second.cbegin(); k != j->second.cend(); ++k) {
+          // std::cerr << "tuple rid " << *k << " is checked" << std::endl;
           rids[j->first].insert(*k);
         }
       }
@@ -78,13 +84,14 @@ auto TransactionManager::VerifyTxn(Transaction *txn) -> bool {
     TableInfo *table_info = catalog_->GetTable(i->first);
     for (auto rid_iter = i->second.begin(); rid_iter != i->second.end(); ++rid_iter) {
       auto tuple_pair = table_info->table_->GetTuple(*rid_iter);
+      // std::cerr << " Check tuple rid is " << *rid_iter << std::endl;
       UndoLink undo_link = *GetUndoLink(*rid_iter);
       if (tuple_pair.first.ts_ < TXN_START_ID) {
         // need check tuple in table heap
         if (!tuple_pair.first.is_deleted_) {
           // if is not insert and delete by the same txn
-          if (!CheckOverlap(txn->scan_predicates_[table_info->oid_], &tuple_pair.second, table_info->schema_)) {
-            Abort(txn);
+          if (CheckOverlap(txn->scan_predicates_[table_info->oid_], &tuple_pair.second, table_info->schema_)) {
+            // Abort(txn);
             return false;
           }
         }
@@ -102,8 +109,8 @@ auto TransactionManager::VerifyTxn(Transaction *txn) -> bool {
           continue;
         }
         res_tuple = ReplayUndoLog(&table_info->schema_, *res_tuple, undo_log);
-        if (!CheckOverlap(txn->scan_predicates_[table_info->oid_], &tuple_pair.second, table_info->schema_)) {
-          Abort(txn);
+        if (CheckOverlap(txn->scan_predicates_[table_info->oid_], &tuple_pair.second, table_info->schema_)) {
+          // Abort(txn);
           return false;
         }
 

@@ -569,10 +569,13 @@ void InsertTuple(const IndexInfo *primary_key_idx_info, const TableInfo *table_i
 auto CheckOverlap(const std::vector<AbstractExpressionRef> &predicates, const Tuple *tuple, const Schema &schema)
     -> bool {
   for (const auto &predicate : predicates) {
+    // std::cerr << "predicate value is " << predicate->Evaluate(tuple, schema).ToString() << std::endl;
     if (predicate->Evaluate(tuple, schema).CompareExactlyEquals(ValueFactory::GetBooleanValue(true))) {
+      // std::cerr << " CheckOverlap endter true case" << std::endl;
       return true;
     }
   }
+  // std::cerr << " CheckOverlap endter false case" << std::endl;
   return false;
 }
 }  // namespace bustub
