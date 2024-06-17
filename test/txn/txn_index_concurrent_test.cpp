@@ -130,7 +130,7 @@ TEST(TxnIndexTest, DISABLED_IndexConcurrentUpdateTest) {  // NOLINT
     update_threads.reserve(thread_cnt);
     std::map<int, std::vector<bool>> operation_result;
     std::mutex result_mutex;
-    bool add_delete_insert = false;  //(n % 2 == 1);
+    bool add_delete_insert = (n % 2 == 1);
     fmt::println(stderr, "trial {}: running with {} threads with {} rows, add_delete_insert={}", n + 1, thread_cnt,
                  number_cnt, add_delete_insert);
     global_disable_execution_exception_print.store(true);

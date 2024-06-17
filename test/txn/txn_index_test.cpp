@@ -234,6 +234,10 @@ TEST(GradingTxnIndexTest, IndexUpdateConflictTest) {  // NOLINT
   WithTxn(txn3, ExecuteTxnTainted(*bustub, _var, _txn, "UPDATE maintable SET col2 = 2 WHERE col1 = 1"));
   TxnMgrDbg("after txn3 tainted", bustub->txn_manager_.get(), table_info, table_info->table_.get());
   // hidden tests...
+  auto txn6 = BeginTxn(*bustub, "txn6");
+  WithTxn(txn6, ExecuteTxn(*bustub, _var, _txn, "INSERT INTO maintable VALUES (1, 2), (2, 2), (3, 2), (5, 2), (6, 2)"));
+  TxnMgrDbg("after txn6 modification", bustub->txn_manager_.get(), table_info, table_info->table_.get());
+  // hidden tests...
 }
 
 TEST(TxnIndexTest, UpdatePrimaryKeyTest) {  // NOLINT

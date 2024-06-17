@@ -1,6 +1,5 @@
 #include "concurrency/watermark.h"
 #include <exception>
-#include <mutex>
 #include <shared_mutex>
 #include "common/exception.h"
 
