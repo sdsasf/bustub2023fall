@@ -31,6 +31,11 @@ void SeqScanExecutor::Init() {
   txn_mgr_ = exec_ctx_->GetTransactionManager();
   // table_iter could avoid Halloween problem by recording the stop point RID
   table_iter_ = std::make_unique<TableIterator>(table_info_->table_->MakeIterator());
+
+  // add predicate to txn every time when executor was called
+  exec_ctx_->GetTransaction()->AppendScanPredicate(plan_->table_oid_, plan_->filter_predicate_);
+  // std::cerr << "predicate append in txn " << exec_ctx_->GetTransaction()->GetTransactionIdHumanReadable() <<
+  // std::endl;
 }
 
 // seq_scan must return valid rid, although tuple is reconstructed

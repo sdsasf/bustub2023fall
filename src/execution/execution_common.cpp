@@ -1,6 +1,6 @@
 #include "execution/execution_common.h"
 #include <memory>
-#include <mutex>
+// #include <mutex>
 #include <optional>
 #include <shared_mutex>
 #include <sstream>
@@ -31,6 +31,9 @@ auto ReconstructTuple(const Schema *schema, const Tuple &base_tuple, const Tuple
   Tuple res_tuple = base_tuple;
   bool is_deleted = false;
   for (const auto &undo_log : undo_logs) {
+    // before delete a tuple in table heap, it has a full undoLog
+    // (modified is all true) so ReplayUndoLog could handle base tuple is nullopt
+
     if (undo_log.is_deleted_) {
       // if it has delete undo log, then tuple becomes nullopt
       is_deleted = true;
@@ -62,6 +65,84 @@ auto ReconstructTuple(const Schema *schema, const Tuple &base_tuple, const Tuple
   return res_tuple;
 }
 
+auto ReplayUndoLog(const Schema *schema, const Tuple &base_tuple, const UndoLog &undo_log) -> std::optional<Tuple> {
+  if (undo_log.is_deleted_) {
+    return std::nullopt;
+  }
+  std::vector<Value> values;
+  uint32_t tuple_sz = schema->GetColumnCount();
+
+  // construct undo schema
+  Schema undo_schema = GetUndoLogSchema(undo_log, schema);
+
+  // construct new tuple
+  values.reserve(tuple_sz);
+  for (uint32_t i = 0, j = 0; i < tuple_sz; ++i) {
+    if (undo_log.modified_fields_[i]) {
+      values.push_back(undo_log.tuple_.GetValue(&undo_schema, j++));
+    } else {
+      values.push_back(base_tuple.GetValue(schema, i));
+    }
+  }
+  Tuple res_tuple = Tuple(std::move(values), schema);
+  return res_tuple;
+}
+/*
+// could handle deleted base tuple and log
+auto ReconstructTuple(const Schema *schema, const Tuple &base_tuple, const TupleMeta &base_meta,
+                      const std::vector<UndoLog> &undo_logs) -> std::optional<Tuple> {
+  // UNIMPLEMENTED("not implemented");
+  if (base_meta.is_deleted_ && undo_logs.empty()) {
+    return std::nullopt;
+  }
+  std::optional<Tuple> res_tuple = base_tuple;
+  bool is_deleted = false;
+  for (const auto &undo_log : undo_logs) {
+    // before delete a tuple in table heap, it has a full undoLog
+    // (modified is all true) so ReplayUndoLog could handle base tuple is nullopt
+    auto temp_tuple = ReplayUndoLog(schema, *res_tuple, undo_log);
+    if (!temp_tuple.has_value()) {
+      is_deleted = true;
+    } else {
+      is_deleted = false;
+      res_tuple = temp_tuple;
+    }
+
+    //////////////////////
+    if (undo_log.is_deleted_) {
+      // if it has delete undo log, then tuple becomes nullopt
+      is_deleted = true;
+    } else {
+      is_deleted = false;
+      // construct undo schema
+      Schema undo_schema = GetUndoLogSchema(undo_log, schema);
+
+      // construct new tuple
+      std::vector<Value> values;
+      uint32_t tuple_sz = schema->GetColumnCount();
+      values.reserve(tuple_sz);
+      for (uint32_t i = 0, j = 0; i < tuple_sz; ++i) {
+        if (undo_log.modified_fields_[i]) {
+          values.push_back(undo_log.tuple_.GetValue(&undo_schema, j++));
+        } else {
+          values.push_back(res_tuple.GetValue(schema, i));
+        }
+      }
+      res_tuple = Tuple(std::move(values), schema);
+    }
+    ///////////////////////////
+
+    // only debug for ReconstructTuple()
+    // fmt::println(stderr, UndoLogTupleString(undo_log, schema));
+  }
+  //////////////////////////////
+  if (is_deleted) {
+    return std::nullopt;
+  }
+  //////////////////////////////////
+  return is_deleted ? std::nullopt : res_tuple;
+}
+*/
 void TxnMgrDbg(const std::string &info, TransactionManager *txn_mgr, const TableInfo *table_info,
                TableHeap *table_heap) {
   // always use stderr for printing logs...
@@ -356,18 +437,29 @@ void LockAndCheck(RID rid, TransactionManager *txn_mgr, Transaction *txn, const 
   // if not self-modification and can't lock
   // is modifying by other txn
   if (!LockVersionLink(rid, txn_mgr)) {
-    txn->SetTainted();
-    throw ExecutionException("have conflict in updating version link");
+    // txn_mgr->Abort(txn);
+    // std::cerr << "    LockVersionLink failed" << std::endl;
+    MyAbort(txn);
+    // throw ExecutionException("Abort");
   }
   // IsWWconflict in case tuple and meta hasn't been modified
   // don't have lock until now
   if (IsWriteWriteConflict(txn, table_info->table_->GetTupleMeta(rid))) {
+    // txn_mgr->Abort(txn);
+    // std::cerr << "    IsWriteWriteConflict failed" << std::endl;
+
     // if has been locked, must unset in_progress before abort
     auto version_link_optional = txn_mgr->GetVersionLink(rid);
     txn_mgr->UpdateVersionLink(rid, VersionUndoLink{version_link_optional->prev_, false}, nullptr);
-    txn->SetTainted();
-    throw ExecutionException("have conflict in updating version link");
+
+    MyAbort(txn);
+    // throw ExecutionException("Abort");
   }
+}
+
+void MyAbort(Transaction *txn) {
+  txn->SetTainted();
+  throw ExecutionException("abort");
 }
 
 void DeleteTuple(const TableInfo *table_info, const Schema *schema, TransactionManager *txn_mgr, Transaction *txn,
@@ -414,32 +506,39 @@ void InsertTuple(const IndexInfo *primary_key_idx_info, const TableInfo *table_i
   primary_key_idx_info->index_->ScanKey(child_tuple.KeyFromTuple(table_info->schema_, primary_key_idx_info->key_schema_,
                                                                  primary_key_idx_info->index_->GetKeyAttrs()),
                                         &res, txn);
+  // std::cerr << "    entre InsertTuple()" << std::endl;
   // if primary key already existed
   if (!res.empty()) {
+    // std::cerr << "  a txn enter this condition primary key is existed" << std::endl;
     RID target_rid = res.front();
     const auto &[target_meta, target_tuple] = table_info->table_->GetTuple(target_rid);
     if (!target_meta.is_deleted_) {
-      txn->SetTainted();
-      throw ExecutionException("primary key already existed");
-    }
-    // if is deleted by other txn and has commited
-    // construct new delete undoLog
-    // else is self modification(is deleted by this txn before), update in place directly
-    if (target_meta.ts_ != txn->GetTransactionTempTs()) {
-      LockAndCheck(target_rid, txn_mgr, txn, table_info);
-      // because old tuple is deleted, so GenerateDiffLog() return delete undolog directly
-      // new tuple is not used
-      UndoLog temp_undo_log = GenerateDiffLog(target_tuple, target_meta, Tuple{}, new_tuple_meta, output_schema);
-      auto version_link_optional = txn_mgr->GetVersionLink(target_rid);
-      temp_undo_log.prev_version_ = version_link_optional->prev_;
+      // txn_mgr->Abort(txn);
+      // std::cerr << "    " << child_tuple.ToString(output_schema)
+      //          << " inserted into table heap failed because tuple is not deleted" << std::endl;
+      MyAbort(txn);
+    } else {
+      // if is deleted by other txn and has commited
+      // construct new delete undoLog
+      // else is self modification(is deleted by this txn before), update in place directly
+      if (target_meta.ts_ != txn->GetTransactionTempTs()) {
+        // std::cerr << "  a txn enter this condition before LockAndCheck()" << std::endl;
+        LockAndCheck(target_rid, txn_mgr, txn, table_info);
+        // std::cerr << "a txn enter this condition before GenerateDiffLog()" << std::endl;
+        UndoLog temp_undo_log = GenerateDiffLog(target_tuple, target_meta, Tuple{}, new_tuple_meta, output_schema);
+        auto version_link_optional = txn_mgr->GetVersionLink(target_rid);
+        temp_undo_log.prev_version_ = version_link_optional->prev_;
 
-      UndoLink new_undo_link = txn->AppendUndoLog(temp_undo_log);
-      txn_mgr->UpdateVersionLink(target_rid, VersionUndoLink{new_undo_link, true});
-      // Add tuple rid to txn's write set
-      txn->AppendWriteSet(table_info->oid_, target_rid);
+        UndoLink new_undo_link = txn->AppendUndoLog(temp_undo_log);
+        txn_mgr->UpdateVersionLink(target_rid, VersionUndoLink{new_undo_link, true});
+        // Add tuple rid to txn's write set
+        txn->AppendWriteSet(table_info->oid_, target_rid);
+      }
+      table_info->table_->UpdateTupleInPlace(new_tuple_meta, child_tuple, target_rid);
+      // std::cerr << "    " << child_tuple.ToString(output_schema) << " inserted into table heap" << std::endl;
     }
-    table_info->table_->UpdateTupleInPlace(new_tuple_meta, child_tuple, target_rid);
   } else {
+    // std::cerr << "  a txn enter this condition primary key don't exist" << std::endl;
     // insert tuple into table heap directly, not change schema,
     // because The planner will ensure that the values have the same schema as the table
     // insert into table heap is thread safe
@@ -452,14 +551,37 @@ void InsertTuple(const IndexInfo *primary_key_idx_info, const TableInfo *table_i
         *rid_optional, txn);
     // if primary key already existed in primary index
     if (!is_inserted) {
-      txn->SetTainted();
-      throw ExecutionException("primary key already existed");
+      // std::cerr << "    " << child_tuple.ToString(output_schema)
+      //          << " inserted into table heap failed because primary key is existed" << std::endl;
+      LockVersionLink(*rid_optional, txn_mgr);
+      txn->AppendWriteSet(table_info->oid_, *rid_optional);
+      // txn_mgr->Abort(txn);
+      MyAbort(txn);
+      // throw ExecutionException("Abort");
+    } else {
+      // std::cerr << "befor update undolink" << std::endl;
+      // update txn_mgr_ version info map
+      txn_mgr->UpdateUndoLink(*rid_optional, std::nullopt);
+      // std::cerr << "after update undolink" << std::endl;
+      // std::cerr << "    " << child_tuple.ToString(output_schema) << " inserted into table heap" << std::endl;
+      LockVersionLink(*rid_optional, txn_mgr);
+      // std::cerr << "after lock undolink" << std::endl;
+      // Add tuple rid to txn's write set
+      txn->AppendWriteSet(table_info->oid_, *rid_optional);
     }
-    // update txn_mgr_ version info map
-    txn_mgr->UpdateUndoLink(*rid_optional, std::nullopt);
-    LockVersionLink(*rid_optional, txn_mgr);
-    // Add tuple rid to txn's write set
-    txn->AppendWriteSet(table_info->oid_, *rid_optional);
   }
+}
+
+auto CheckOverlap(const std::vector<AbstractExpressionRef> &predicates, const Tuple *tuple, const Schema &schema)
+    -> bool {
+  for (const auto &predicate : predicates) {
+    // std::cerr << "predicate value is " << predicate->Evaluate(tuple, schema).ToString() << std::endl;
+    if (predicate->Evaluate(tuple, schema).CompareExactlyEquals(ValueFactory::GetBooleanValue(true))) {
+      // std::cerr << " CheckOverlap endter true case" << std::endl;
+      return true;
+    }
+  }
+  // std::cerr << " CheckOverlap endter false case" << std::endl;
+  return false;
 }
 }  // namespace bustub

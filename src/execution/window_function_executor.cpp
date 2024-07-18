@@ -3,6 +3,7 @@
 #include <iterator>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 #include "execution/plans/window_plan.h"
 #include "storage/table/tuple.h"

@@ -232,7 +232,6 @@ TEST(TxnScanTest, ScanTest) {  // NOLINT
                                     {2},
                                     {3},
                                     {5},
-
                                 }));  // <- you will need to fill in the answer
   fmt::println(stderr, "E: Verify txn4");
   WithTxn(txn4, QueryHideResult(*bustub, _var, _txn, query_int,
