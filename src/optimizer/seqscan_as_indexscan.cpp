@@ -14,7 +14,7 @@ auto Optimizer::OptimizeSeqScanAsIndexScan(const bustub::AbstractPlanNodeRef &pl
   std::vector<AbstractPlanNodeRef> children;
   for (const auto &child : plan->GetChildren()) {
     // optimize children first
-    // children.emplace_back(OptimizeSeqScanAsIndexScan(child));
+    children.emplace_back(OptimizeSeqScanAsIndexScan(child));
   }
   auto optimized_plan = plan->CloneWithChildren(std::move(children));
 
